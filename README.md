@@ -14,9 +14,9 @@
 ## 📦 安装与运行
 
 ### 1. 终端用户 (推荐)
-1. 下载最新的 `googleAds.zip`。
+1. 下载最新的 `AntigravityAds.zip`。
 2. 解压到本地文件夹。
-3. 双击运行 `googleAds.exe` 即可启动，无需安装任何环境。
+3. 双击运行 `AntigravityAds.exe` 即可启动，无需安装任何环境。
 
 ### 2. 开发者 (源码运行)
 1. 克隆仓库：`git clone <repository_url>`
