@@ -12,6 +12,7 @@ import sys
 import urllib.parse
 import json
 import random
+import http.client
 
 # Modern Chrome User-Agents for common operating systems
 MODERN_USER_AGENTS = [
@@ -161,6 +162,7 @@ class BrowserController:
     def __init__(self):
         self.active_processes = {}
         self.relay_processes = {}
+        self.profile_debug_ports = {}  # profile_id -> debug_port
         
         if getattr(sys, 'frozen', False):
             self.base_dir = os.path.dirname(sys.executable)
@@ -249,6 +251,12 @@ class BrowserController:
         
         if loaded_extensions:
             args.append(f"--load-extension={','.join(loaded_extensions)}")
+        
+        # Assign a unique debug port for CDP access
+        debug_port = get_free_port()
+        args.append(f"--remote-debugging-port={debug_port}")
+        self.profile_debug_ports[profile_id] = debug_port
+        log_debug(f"CDP debug port for profile {profile_id}: {debug_port}")
         
         if profile.get('user_agent'):
             ua = profile['user_agent']
@@ -342,11 +350,63 @@ class BrowserController:
             except: pass
             del self.active_processes[profile_id]
         self.close_relay(profile_id)
+        self.profile_debug_ports.pop(profile_id, None)
 
     def close_relay(self, profile_id):
         if profile_id in self.relay_processes:
             try: self.relay_processes[profile_id].terminate()
             except: pass
             del self.relay_processes[profile_id]
+
+    def _cdp_open_url(self, debug_port, url):
+        """Use CDP to open a URL in a new tab for the browser at the given debug port."""
+        try:
+            conn = http.client.HTTPConnection("127.0.0.1", debug_port, timeout=5)
+            # Get list of targets
+            conn.request("GET", "/json")
+            resp = conn.getresponse()
+            targets = json.loads(resp.read().decode())
+            conn.close()
+            
+            # Find an existing page target to use
+            page_target = next((t for t in targets if t.get('type') == 'page'), None)
+            if not page_target:
+                log_debug(f"No page target found on port {debug_port}")
+                return False
+            
+            ws_id = page_target['id']
+            
+            # Use /json/new to open a new tab with the URL
+            conn2 = http.client.HTTPConnection("127.0.0.1", debug_port, timeout=5)
+            encoded_url = urllib.parse.quote(url, safe=':/?=&%')
+            conn2.request("GET", f"/json/new?{encoded_url}")
+            resp2 = conn2.getresponse()
+            result = resp2.read()
+            conn2.close()
+            log_debug(f"Opened new tab on port {debug_port}: {result}")
+            return True
+        except Exception as e:
+            log_debug(f"CDP error on port {debug_port}: {e}")
+            return False
+
+    def install_extension_to_profile(self, profile_id, store_url):
+        """Install a Chrome extension to a specific running profile via CDP."""
+        if not self.is_running(profile_id):
+            return False, "未运行"
+        debug_port = self.profile_debug_ports.get(profile_id)
+        if not debug_port:
+            return False, "无调试端口"
+        success = self._cdp_open_url(debug_port, store_url)
+        return success, "已打开安装页面" if success else "打开失败"
+
+    def install_extension_to_all(self, store_url):
+        """Install a Chrome extension to all running profiles via CDP."""
+        results = {}
+        running_ids = list(self.active_processes.keys())
+        for profile_id in running_ids:
+            if self.is_running(profile_id):
+                ok, msg = self.install_extension_to_profile(profile_id, store_url)
+                results[profile_id] = (ok, msg)
+        return results
 
 browser_controller = BrowserController()
