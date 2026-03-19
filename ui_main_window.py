@@ -352,7 +352,7 @@ class MainWindow(QMainWindow):
 
         wrapper = QWidget()
         layout = QHBoxLayout(wrapper)
-        layout.setContentsMargins(8, 8, 8, 8)
+        layout.setContentsMargins(4, 4, 4, 4)
         layout.addWidget(label)
         layout.setAlignment(Qt.AlignmentFlag.AlignCenter)
         return wrapper
@@ -520,6 +520,7 @@ class MainWindow(QMainWindow):
         self.proxy_table.setHorizontalHeaderLabels(["ID", "类型", "地址", "国家/地区", "状态", "备注", "操作"])
         self.proxy_table.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeMode.Stretch)
         self.proxy_table.verticalHeader().setVisible(False)
+        self.proxy_table.verticalHeader().setDefaultSectionSize(50) # Ensure row height is enough for chips
         self._setup_table_behavior(self.proxy_table)
         self.proxy_table.setSortingEnabled(True)
         layout.addWidget(self.proxy_table)
