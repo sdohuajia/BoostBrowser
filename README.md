@@ -19,7 +19,7 @@
 3. 双击运行 `AntigravityAds.exe` 即可启动，无需安装任何环境。
 
 ### 2. 开发者 (源码运行)
-1. 克隆仓库：`git clone <repository_url>`
+1. 克隆仓库：`git clone https://github.com/sdohuajia/google.git`
 2. 安装依赖：
    ```bash
    pip install PyQt6 pygetwindow pynput pypiwin32 Faker PyInstaller PySocks requests
