@@ -1,6 +1,6 @@
-# google Browser (googleAds)
+# Antigravity Browser (AntigravityAds)
 
-一款专为社交媒体营销设计的指纹浏览器管理工具。支持多账号独立指纹、现代 Windows 内核模拟、高级隐匿补丁以及多窗口同步操作。
+一款专为跨境电商和社交媒体营销设计的指纹浏览器管理工具。支持多账号独立指纹、现代 Windows 内核模拟、高级隐匿补丁以及多窗口同步操作。
 
 ## 🚀 核心功能
 
@@ -19,7 +19,7 @@
 3. 双击运行 `AntigravityAds.exe` 即可启动，无需安装任何环境。
 
 ### 2. 开发者 (源码运行)
-1. 克隆仓库：`git clone https://github.com/sdohuajia/google.git`
+1. 克隆仓库：`git clone <repository_url>`
 2. 安装依赖：
    ```bash
    pip install PyQt6 pygetwindow pynput pypiwin32 Faker PyInstaller PySocks requests
@@ -44,4 +44,4 @@
 - 软件产生的环境数据存放在 `browser_data` 文件夹中，数据库存放在 `profiles.db` 中。
 
 ---
-*Powered by google Team*
+*Powered by Antigravity Team*

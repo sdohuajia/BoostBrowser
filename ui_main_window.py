@@ -3,6 +3,7 @@ import subprocess
 import threading
 import json
 import sqlite3
+import re
 import database
 import win32gui
 import win32process
@@ -11,9 +12,11 @@ from PyQt6.QtWidgets import (
     QMainWindow, QWidget, QVBoxLayout, QHBoxLayout, 
     QPushButton, QLabel, QTableWidget, QTableWidgetItem, 
     QHeaderView, QStackedWidget, QFrame, QMessageBox,
-    QCheckBox, QFormLayout, QLineEdit, QRadioButton, QApplication
+    QCheckBox, QFormLayout, QLineEdit, QRadioButton, QApplication,
+    QSystemTrayIcon, QMenu, QGroupBox, QButtonGroup
 )
-from PyQt6.QtCore import Qt, QSize, QTimer
+from PyQt6.QtCore import Qt, QSize, QTimer, QMetaObject, Q_ARG, pyqtSlot
+from PyQt6.QtGui import QIcon, QFont, QAction, QCloseEvent
 import ctypes
 import sys
 try:
@@ -44,13 +47,74 @@ class MainWindow(QMainWindow):
         self.resize(1100, 700)
         self.syncer = InputSyncer()
         self.status_window = None
+        
+        self.config_file = os.path.join(os.path.dirname(database.get_db_path()), 'config.json')
+        self.settings = self.load_settings()
+        self.is_force_quit = False
+        
         self.setup_ui()
+        self.setup_tray()
         self.load_data()
 
         # Timer to update browser statuses
         self.status_timer = QTimer(self)
         self.status_timer.timeout.connect(self.update_statuses)
         self.status_timer.start(2000)
+
+    def load_settings(self):
+        default_settings = {"close_behavior": "minimize"}
+        if os.path.exists(self.config_file):
+            try:
+                with open(self.config_file, 'r', encoding='utf-8') as f:
+                    return {**default_settings, **json.load(f)}
+            except Exception: pass
+        return default_settings
+        
+    def save_settings(self):
+        try:
+            with open(self.config_file, 'w', encoding='utf-8') as f:
+                json.dump(self.settings, f, indent=4)
+        except Exception: pass
+
+    def setup_tray(self):
+        self.tray_icon = QSystemTrayIcon(self)
+        self.tray_icon.setIcon(QIcon(resource_path("app.png")))
+        tray_menu = QMenu()
+        show_action = QAction("显示主界面", self)
+        show_action.triggered.connect(self.showNormal)
+        quit_action = QAction("完全退出", self)
+        quit_action.triggered.connect(self.force_quit)
+        tray_menu.addAction(show_action)
+        tray_menu.addAction(quit_action)
+        self.tray_icon.setContextMenu(tray_menu)
+        self.tray_icon.activated.connect(self.tray_activated)
+        self.tray_icon.show()
+        
+    def tray_activated(self, reason):
+        if reason == QSystemTrayIcon.ActivationReason.DoubleClick:
+            self.showNormal()
+            self.activateWindow()
+
+    def force_quit(self):
+        self.is_force_quit = True
+        self.close()
+
+    def closeEvent(self, event: QCloseEvent):
+        behavior = self.settings.get("close_behavior", "minimize")
+        
+        if self.is_force_quit or behavior != "minimize":
+            if behavior == "quit_and_close_browsers" or (self.is_force_quit and behavior == "quit_and_close_browsers"):
+                self.action_close_all_running()
+            event.accept()
+        else:
+            event.ignore()
+            self.hide()
+            self.tray_icon.showMessage(
+                "AntigravityAds",
+                "程序已最小化到托盘，双击图标恢复显示。",
+                QSystemTrayIcon.MessageIcon.Information,
+                2000
+            )
 
     def setup_ui(self):
         self.setWindowIcon(QIcon(resource_path("app.png")))
@@ -231,6 +295,42 @@ class MainWindow(QMainWindow):
         controls.addStretch()
         layout.addLayout(controls)
         
+        # --- Extension Install Area ---
+        ext_frame = QFrame()
+        ext_frame.setObjectName("ExtFrame")
+        ext_layout = QHBoxLayout(ext_frame)
+        ext_layout.setContentsMargins(10, 8, 10, 8)
+        ext_layout.setSpacing(8)
+        
+        ext_icon = QLabel("🧩")
+        ext_icon.setFixedWidth(24)
+        ext_layout.addWidget(ext_icon)
+        
+        ext_label = QLabel("插件地址:")
+        ext_label.setStyleSheet("color: #cdd6f4; font-size: 13px;")
+        ext_label.setFixedWidth(60)
+        ext_layout.addWidget(ext_label)
+        
+        self.ext_url_input = QLineEdit()
+        self.ext_url_input.setPlaceholderText("粘贴 Chrome 商店地址，例如: https://chromewebstore.google.com/detail/xxx/mcohilncbfahbmgdjkbpemcciiolgcge")
+        self.ext_url_input.setStyleSheet(
+            "QLineEdit { background-color: #313244; color: #cdd6f4; border: 1px solid #45475a; "
+            "border-radius: 4px; padding: 6px 10px; font-size: 13px; }"
+            "QLineEdit:focus { border-color: #89b4fa; }"
+        )
+        ext_layout.addWidget(self.ext_url_input)
+        
+        btn_install_ext = QPushButton("🚀 批量安装插件")
+        btn_install_ext.setObjectName("PrimaryBtn")
+        btn_install_ext.setFixedWidth(130)
+        btn_install_ext.clicked.connect(self.action_install_extension)
+        ext_layout.addWidget(btn_install_ext)
+        
+        ext_frame.setStyleSheet(
+            "#ExtFrame { background-color: #1e1e2e; border: 1px solid #313244; border-radius: 6px; margin-top: 4px; }"
+        )
+        layout.addWidget(ext_frame)
+        
         self.sync_table = QTableWidget()
         self.sync_table.setColumnCount(5)
         self.sync_table.setHorizontalHeaderLabels(["跟随", "ID", "名称", "状态", "主控"])
@@ -255,8 +355,50 @@ class MainWindow(QMainWindow):
         header = QLabel("系统设置")
         header.setObjectName("PageHeader")
         layout.addWidget(header)
+        
+        # --- Close Behavior Group ---
+        group_box = QGroupBox("关闭主窗口(X)时的行为:")
+        group_box.setStyleSheet(
+            "QGroupBox { color: #cdd6f4; font-size: 14px; font-weight: bold; border: 1px solid #313244; border-radius: 6px; margin-top: 10px; } "
+            "QGroupBox::title { subcontrol-origin: margin; left: 10px; padding: 0 5px 0 5px; } "
+            "QRadioButton { color: #bac2de; font-weight: normal; margin-top: 5px; margin-bottom: 5px; }"
+        )
+        group_layout = QVBoxLayout(group_box)
+        group_layout.setSpacing(10)
+        group_layout.setContentsMargins(15, 25, 15, 15)
+        
+        self.behavior_group = QButtonGroup(page)
+        
+        rb_minimize = QRadioButton("最小化到系统托盘（默认，保持后台运行）")
+        rb_quit = QRadioButton("直接退出程序（可能会有浏览器仍留在后台运行）")
+        rb_quit_all = QRadioButton("退出程序并强制关闭所有关联浏览器（安全推荐）")
+        
+        self.behavior_group.addButton(rb_minimize, 1)
+        self.behavior_group.addButton(rb_quit, 2)
+        self.behavior_group.addButton(rb_quit_all, 3)
+        
+        group_layout.addWidget(rb_minimize)
+        group_layout.addWidget(rb_quit)
+        group_layout.addWidget(rb_quit_all)
+        
+        current_beh = self.settings.get("close_behavior", "minimize")
+        if current_beh == "minimize": rb_minimize.setChecked(True)
+        elif current_beh == "quit": rb_quit.setChecked(True)
+        elif current_beh == "quit_and_close_browsers": rb_quit_all.setChecked(True)
+        
+        self.behavior_group.idToggled.connect(self._on_close_behavior_changed)
+        
+        layout.addWidget(group_box)
         layout.addStretch()
         return page
+
+    def _on_close_behavior_changed(self, id, checked):
+        if not checked: return
+        behavior = "minimize"
+        if id == 2: behavior = "quit"
+        elif id == 3: behavior = "quit_and_close_browsers"
+        self.settings["close_behavior"] = behavior
+        self.save_settings()
 
     def load_data(self):
         # 1. Profiles
@@ -493,6 +635,58 @@ class MainWindow(QMainWindow):
             if not browser_controller.launch_profile(profile):
                 QMessageBox.warning(self, "错误", "启动失败")
         self.load_data()
+
+    def action_install_extension(self):
+        """通过 CDP 向所有运行中的浏览器安装 Chrome 插件"""
+        url = self.ext_url_input.text().strip()
+        if not url:
+            QMessageBox.warning(self, "提示", "请先输入 Chrome 商店插件地址")
+            return
+        
+        # Validate: must be a Chrome Web Store URL
+        if not re.search(r'chromewebstore\.google\.com/detail/', url):
+            QMessageBox.warning(self, "格式错误",
+                "请输入有效的 Chrome 商店地址\n"
+                "例如: https://chromewebstore.google.com/detail/okx-wallet/mcohilncbfahbmgdjkbpemcciiolgcge")
+            return
+        
+        # Check running profiles
+        running_ids = [pid for pid in browser_controller.active_processes
+                       if browser_controller.is_running(pid)]
+        if not running_ids:
+            QMessageBox.information(self, "提示", "没有正在运行的浏览器，请先启动浏览器环境")
+            return
+        
+        # Run in background thread to avoid UI freeze
+        def do_install():
+            results = browser_controller.install_extension_to_all(url)
+            
+            success_count = sum(1 for ok, _ in results.values() if ok)
+            fail_count = len(results) - success_count
+            
+            details = []
+            for pid, (ok, msg) in results.items():
+                icon = "✅" if ok else "❌"
+                details.append(f"{icon} 环境 {pid}: {msg}")
+            
+            msg_text = (
+                f"操作完成！\n"
+                f"✅ 成功: {success_count} 个  ❌ 失败: {fail_count} 个\n\n"
+                + "\n".join(details) +
+                "\n\n⚠️ 请在每个浏览器中点击 [添加到 Chrome] 完成安装"
+            )
+            
+            QMetaObject.invokeMethod(
+                self, "_show_install_result",
+                Qt.ConnectionType.QueuedConnection,
+                Q_ARG(str, msg_text)
+            )
+        
+        threading.Thread(target=do_install, daemon=True).start()
+    
+    @pyqtSlot(str)
+    def _show_install_result(self, msg_text):
+        QMessageBox.information(self, "批量安装插件", msg_text)
 
     def update_statuses(self):
         if self.stack.currentIndex() == 0:
