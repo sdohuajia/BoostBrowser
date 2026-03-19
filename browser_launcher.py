@@ -16,10 +16,10 @@ import http.client
 
 # Modern Chrome User-Agents for common operating systems
 MODERN_USER_AGENTS = [
-    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Safari/537.36",
-    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/145.0.0.0 Safari/537.36",
-    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/144.0.0.0 Safari/537.36",
-    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36"
+    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/134.0.6998.35 Safari/537.36",
+    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/133.0.6943.54 Safari/537.36",
+    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/132.0.6834.110 Safari/537.36",
+    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.6778.204 Safari/537.36"
 ]
 
 # Logging setup
@@ -190,17 +190,20 @@ class BrowserController:
         args = [
             chrome_exe,
             f"--user-data-dir={profile_dir}",
-            "--no-first-run",
-            "--no-default-browser-check",
-            "--disable-sync",
-            "--disable-background-networking",
-            # Anti-detection and Stealth flags
+            # Core Anti-detection flags
             "--disable-blink-features=AutomationControlled",
             "--disable-infobars",
+            "--no-first-run",
+            "--no-default-browser-check",
             "--password-store=basic",
             "--use-mock-keychain",
-            "--disable-features=IsolateOrigins,site-per-process",
             "--lang=zh-CN",
+            # Stability and Stealth flags
+            "--disable-features=IsolateOrigins,site-per-process,Translate,OptimizationHints,OptimizationTargetPrediction,OptimizationGuideModelDownloading",
+            "--disable-component-update",
+            "--disable-background-timer-throttling",
+            "--disable-backgrounding-occluded-windows",
+            "--disable-renderer-backgrounding",
             "--flag-switches-begin",
             "--disable-blink-features=AutomationControlled",
             "--flag-switches-end"
@@ -260,21 +263,19 @@ class BrowserController:
         
         if profile.get('user_agent'):
             ua = profile['user_agent']
-            # If manually specified UA is old or mismatched (e.g. Opera, MSIE, Ancient Windows, Linux on Windows), replace it
-            suspicious_markers = [
-                "Android 1.5", "Firefox/5.0", "Opera", "X11", "Linux", "Macintosh", "Intel Mac",
-                "MSIE", "Trident", "Windows 98", "Win 9x", "Windows NT 5", "Windows NT 6", "Windows NT 6.1"
-            ]
-            if any(marker in ua for marker in suspicious_markers):
-                version = profile.get('chrome_version', '146')
-                ua = f"Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/{version}.0.0.0 Safari/537.36"
-                log_debug(f"Suspicious or mismatched UA detected ({profile.get('user_agent')}), replaced with: {ua}")
-            args.append(f"--user-agent={ua}")
-        else:
-            # Generate UA based on selected version
-            version = profile.get('chrome_version', '146')
-            ua = f"Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/{version}.0.0.0 Safari/537.36"
-            args.append(f"--user-agent={ua}")
+            # If manually specified UA is suspicious or mismatched, ignore it/use version-matched UA
+            suspicious_markers = ["Android 1.5", "Firefox/5.0", "Opera", "X11", "Linux", "Macintosh", "Intel Mac", "MSIE", "Trident"]
+            if not any(marker in ua for marker in suspicious_markers):
+                args.append(f"--user-agent={ua}")
+            else:
+                ver = profile.get('chrome_version', '134')
+                build = random.randint(6000, 7100)
+                patch = random.randint(1, 150)
+                ua = f"Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/{ver}.0.{build}.{patch} Safari/537.36"
+                log_debug(f"Suspicious UA detected, using version-matched randomized UA: {ua}")
+                args.append(f"--user-agent={ua}")
+        # If no UA is provided, we intentionally DO NOT add --user-agent flag.
+        # This allows Chrome to use its authentic, native User-Agent.
             
         # Target URL
         args.append("https://www.whoer.net")

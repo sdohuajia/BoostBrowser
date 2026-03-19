@@ -24,6 +24,25 @@ class ProxyDialog(QDialog):
         self.setup_ui()
 
     def setup_ui(self):
+        self.setStyleSheet("""
+            QDialog { background: #141824; color: #dce4f6; }
+            QLabel { color: #bfcae2; }
+            QLineEdit, QTextEdit, QComboBox {
+                background: #1b2130; color: #e6eeff; border: 1px solid #34405b;
+                border-radius: 8px; padding: 6px 10px;
+            }
+            QLineEdit:focus, QTextEdit:focus, QComboBox:focus { border-color: #5f87d1; }
+            QPushButton {
+                background: #1d2230; color: #d6dff3; border: 1px solid #36405a;
+                border-radius: 8px; padding: 7px 14px;
+            }
+            QPushButton:hover { background: #2a3246; }
+            QPushButton#PrimaryBtn { background-color: #4f74b8; color: #f4f8ff; border: 1px solid #5f87d1; font-weight: 700; }
+            QPushButton#PrimaryBtn:hover { background: #628bd8; }
+            QPushButton#ActionBtn { background-color: #24324c; color: #dbe8ff; border: 1px solid #3f5e94; font-weight: 600; }
+            QPushButton#ActionBtn:hover { background: #2f4163; }
+        """)
+
         layout = QVBoxLayout(self)
         
         # Row 1: Proxy Type & Channel
@@ -157,3 +176,60 @@ class ProxyDialog(QDialog):
 
     def get_data(self):
         return self.result_data
+
+class BulkProxyDialog(QDialog):
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.setStyleSheet("""
+            QDialog { background: #141824; color: #dce4f6; }
+            QLabel { color: #bfcae2; }
+            QTextEdit, QComboBox {
+                background: #1b2130; color: #e6eeff; border: 1px solid #34405b;
+                border-radius: 8px; padding: 6px 10px;
+            }
+            QTextEdit:focus, QComboBox:focus { border-color: #5f87d1; }
+            QPushButton {
+                background: #1d2230; color: #d6dff3; border: 1px solid #36405a;
+                border-radius: 8px; padding: 7px 14px;
+            }
+            QPushButton#PrimaryBtn { background-color: #4f74b8; color: #f4f8ff; border: 1px solid #5f87d1; font-weight: 700; }
+        """)
+        self.setWindowTitle("批量导入代理")
+        self.setMinimumWidth(450)
+        self.setMinimumHeight(400)
+        
+        layout = QVBoxLayout(self)
+        
+        # Proxy Type
+        type_layout = QHBoxLayout()
+        type_layout.addWidget(QLabel("批量设定代理类型:"))
+        self.type_combo = QComboBox()
+        self.type_combo.addItems(["HTTP", "HTTPS", "SOCKS5", "SOCKS4", "SSH"])
+        type_layout.addWidget(self.type_combo)
+        type_layout.addStretch()
+        layout.addLayout(type_layout)
+        
+        # Text Area
+        layout.addWidget(QLabel("请输入代理列表 (每行一个代理):"))
+        self.text_edit = QTextEdit()
+        self.text_edit.setPlaceholderText("可以在此粘贴您的代理列表\n格式: ip:port 或 username:password@ip:port")
+        layout.addWidget(self.text_edit)
+        
+        # Buttons
+        btn_layout = QHBoxLayout()
+        self.btn_cancel = QPushButton("取消")
+        self.btn_cancel.clicked.connect(self.reject)
+        self.btn_save = QPushButton("确认导入")
+        self.btn_save.setObjectName("PrimaryBtn")
+        self.btn_save.clicked.connect(self.accept)
+        
+        btn_layout.addStretch()
+        btn_layout.addWidget(self.btn_cancel)
+        btn_layout.addWidget(self.btn_save)
+        layout.addLayout(btn_layout)
+
+    def get_data(self):
+        proxy_type = self.type_combo.currentText()
+        text = self.text_edit.toPlainText().strip()
+        lines = [line.strip() for line in text.split('\n') if line.strip()]
+        return {"type": proxy_type, "proxies": lines}

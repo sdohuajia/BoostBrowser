@@ -1,6 +1,8 @@
 import sys
+import os
 import asyncio
 from PyQt6.QtWidgets import QApplication
+from PyQt6.QtCore import Qt
 from ui_main_window import MainWindow
 import proxy_relay
 
@@ -25,8 +27,12 @@ def main():
     import database
     database.init_db()
     
+    os.environ.setdefault("QT_ENABLE_HIGHDPI_SCALING", "1")
+    os.environ.setdefault("QT_AUTO_SCREEN_SCALE_FACTOR", "1")
+
     app = QApplication(sys.argv)
-    
+    app.setHighDpiScaleFactorRoundingPolicy(Qt.HighDpiScaleFactorRoundingPolicy.PassThrough)
+
     # Modern style for the app
     app.setStyle("Fusion")
     

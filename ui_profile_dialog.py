@@ -13,6 +13,18 @@ class ProfileDialog(QDialog):
             self.load_data()
 
     def setup_ui(self):
+        self.setStyleSheet("""
+            QDialog { background: #141824; color: #dce4f6; }
+            QLabel { color: #bfcae2; }
+            QLineEdit, QTextEdit, QComboBox {
+                background: #1b2130; color: #e6eeff; border: 1px solid #34405b;
+                border-radius: 8px; padding: 6px 10px;
+            }
+            QLineEdit:focus, QTextEdit:focus, QComboBox:focus { border-color: #5f87d1; }
+            QPushButton { border-radius: 8px; padding: 7px 14px; border: 1px solid #3a4662; }
+            QPushButton:hover { background: #2a3246; }
+        """)
+
         layout = QVBoxLayout(self)
         form_layout = QFormLayout()
 
@@ -32,7 +44,7 @@ class ProfileDialog(QDialog):
         form_layout.addRow("代理 (Proxy):", self.proxy_input)
 
         self.version_input = QComboBox()
-        self.version_input.addItems(["146", "140", "130", "120", "110", "100", "90"])
+        self.version_input.addItems(["135", "134", "133", "132", "131", "130", "125", "120", "110", "100", "90"])
         form_layout.addRow("内核版本 (Chrome):", self.version_input)
 
         self.ua_input = QTextEdit()
@@ -63,8 +75,8 @@ class ProfileDialog(QDialog):
         self.btn_cancel = QPushButton("取消 (Cancel)")
         
         # Styles for buttons
-        self.btn_save.setStyleSheet("background-color: #2b5fe8; color: white; padding: 6px; border-radius: 4px;")
-        self.btn_cancel.setStyleSheet("background-color: #4a4a4a; color: white; padding: 6px; border-radius: 4px;")
+        self.btn_save.setStyleSheet("background-color: #4f74b8; color: #f4f8ff; border: 1px solid #5f87d1;")
+        self.btn_cancel.setStyleSheet("background-color: #1d2230; color: #d6dff3; border: 1px solid #36405a;")
 
         self.btn_save.clicked.connect(self.save_data)
         self.btn_cancel.clicked.connect(self.reject)
@@ -76,12 +88,14 @@ class ProfileDialog(QDialog):
         layout.addLayout(btn_layout)
 
     def generate_random_ua(self):
-        try:
-            from faker import Faker
-            fake = Faker()
-            self.ua_input.setPlainText(fake.user_agent())
-        except ImportError:
-            QMessageBox.warning(self, "错误", "缺少 Faker 库，请使用 pip install Faker 安装。")
+        import random
+        version = self.version_input.currentText().strip()
+        # Randomize build and patch numbers to look like a real Chrome version release
+        # Examples: 133.0.6943.54, 134.0.6998.35
+        build = random.randint(6000, 7100)
+        patch = random.randint(1, 150)
+        ua = f"Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/{version}.0.{build}.{patch} Safari/537.36"
+        self.ua_input.setPlainText(ua)
 
     def load_proxies_into_combo(self):
         import database
@@ -102,7 +116,7 @@ class ProfileDialog(QDialog):
         self.proxy_input.setCurrentText(self.profile.get('proxy', ''))
         self.ua_input.setPlainText(self.profile.get('user_agent', ''))
         
-        version = self.profile.get('chrome_version', '146')
+        version = self.profile.get('chrome_version', '133')
         index = self.version_input.findText(version)
         if index >= 0:
             self.version_input.setCurrentIndex(index)
@@ -120,7 +134,7 @@ class ProfileDialog(QDialog):
             'notes': self.notes_input.toPlainText().strip(),
             'proxy': self.proxy_input.currentText().strip(),
             'user_agent': self.ua_input.toPlainText().strip(),
-            'chrome_version': self.version_input.currentText().strip()
+            'chrome_version': self.version_input.currentText().strip() or '133'
         }
         self.accept()
 

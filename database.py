@@ -29,7 +29,7 @@ def init_db():
             notes TEXT,
             proxy TEXT,
             user_agent TEXT,
-            chrome_version TEXT DEFAULT '146',
+            chrome_version TEXT DEFAULT '134',
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         )
     ''')
@@ -49,7 +49,7 @@ def init_db():
     
     # Simple migration for existing DBs
     try:
-        cursor.execute("ALTER TABLE profiles ADD COLUMN chrome_version TEXT DEFAULT '146'")
+        cursor.execute("ALTER TABLE profiles ADD COLUMN chrome_version TEXT DEFAULT '134'")
     except: pass
     try:
         cursor.execute("ALTER TABLE proxies ADD COLUMN type TEXT DEFAULT 'HTTP'")
@@ -86,7 +86,7 @@ def get_all_profiles():
         })
     return profiles
 
-def add_profile(name, notes='', proxy='', user_agent='', chrome_version='146'):
+def add_profile(name, notes='', proxy='', user_agent='', chrome_version='134'):
     conn = get_connection()
     cursor = conn.cursor()
     cursor.execute('''

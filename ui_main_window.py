@@ -9,11 +9,12 @@ import win32gui
 import win32process
 import pygetwindow as gw
 from PyQt6.QtWidgets import (
-    QMainWindow, QWidget, QVBoxLayout, QHBoxLayout, 
-    QPushButton, QLabel, QTableWidget, QTableWidgetItem, 
+    QMainWindow, QWidget, QVBoxLayout, QHBoxLayout,
+    QPushButton, QLabel, QTableWidget, QTableWidgetItem,
     QHeaderView, QStackedWidget, QFrame, QMessageBox,
     QCheckBox, QFormLayout, QLineEdit, QRadioButton, QApplication,
-    QSystemTrayIcon, QMenu, QGroupBox, QButtonGroup
+    QSystemTrayIcon, QMenu, QGroupBox, QButtonGroup, QAbstractItemView,
+    QProgressBar
 )
 from PyQt6.QtCore import Qt, QSize, QTimer, QMetaObject, Q_ARG, pyqtSlot
 from PyQt6.QtGui import QIcon, QFont, QAction, QCloseEvent
@@ -35,7 +36,7 @@ def resource_path(relative_path):
     return os.path.join(base_path, relative_path)
 from PyQt6.QtGui import QIcon, QFont
 from ui_profile_dialog import ProfileDialog
-from ui_proxy_dialog import ProxyDialog, TestThread
+from ui_proxy_dialog import ProxyDialog, TestThread, BulkProxyDialog
 from browser_launcher import browser_controller
 from input_syncer import InputSyncer
 from ui_sync_status import SyncStatusWindow
@@ -44,7 +45,8 @@ class MainWindow(QMainWindow):
     def __init__(self):
         super().__init__()
         self.setWindowTitle("AntigravityAds - 专业多开代理防关联浏览器")
-        self.resize(1100, 700)
+        self.resize(1240, 780)
+        self.setMinimumSize(1120, 700)
         self.syncer = InputSyncer()
         self.status_window = None
         
@@ -55,6 +57,7 @@ class MainWindow(QMainWindow):
         self.setup_ui()
         self.setup_tray()
         self.load_data()
+        self._restore_ui_state()
 
         # Timer to update browser statuses
         self.status_timer = QTimer(self)
@@ -100,8 +103,9 @@ class MainWindow(QMainWindow):
         self.close()
 
     def closeEvent(self, event: QCloseEvent):
+        self._save_ui_state()
         behavior = self.settings.get("close_behavior", "minimize")
-        
+
         if self.is_force_quit or behavior != "minimize":
             if behavior == "quit_and_close_browsers" or (self.is_force_quit and behavior == "quit_and_close_browsers"):
                 self.action_close_all_running()
@@ -126,11 +130,11 @@ class MainWindow(QMainWindow):
 
         # --- Sidebar ---
         sidebar = QFrame()
-        sidebar.setFixedWidth(200)
+        sidebar.setFixedWidth(228)
         sidebar.setObjectName("Sidebar")
         sidebar_layout = QVBoxLayout(sidebar)
         
-        logo_label = QLabel("🌌 AntigravityAds")
+        logo_label = QLabel("✦ AntigravityAds Pro")
         logo_label.setObjectName("LogoLabel")
         logo_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
         sidebar_layout.addWidget(logo_label)
@@ -163,28 +167,151 @@ class MainWindow(QMainWindow):
 
         # Style
         self.setStyleSheet("""
-            #Sidebar { background-color: #1e1e2e; border-right: 1px solid #313244; }
-            #LogoLabel { color: #cba6f7; font-size: 18px; font-weight: bold; padding: 20px; }
-            QPushButton#SidebarBtn, QPushButton#SidebarBtnActive {
-                background-color: transparent; color: #a6adc8; border: none;
-                padding: 12px 20px; text-align: left; font-size: 14px; border-radius: 8px; margin: 2px 10px;
+            QMainWindow, QWidget {
+                background-color: #11131a;
+                color: #d9e0ee;
+                font-family: "Microsoft YaHei", "PingFang SC", "Segoe UI";
+                font-size: 13px;
             }
-            QPushButton#SidebarBtn:hover { background-color: #313244; color: #f5e0dc; }
-            QPushButton#SidebarBtnActive { background-color: #89b4fa; color: #11111b; font-weight: bold; }
-            
-            #PageHeader { font-size: 22px; font-weight: bold; color: #cdd6f4; margin-bottom: 10px; }
-            #PrimaryBtn { background-color: #89b4fa; color: #11111b; border-radius: 5px; padding: 8px 15px; font-weight: bold; }
-            #PrimaryBtn:hover { background-color: #b4befe; }
-            
-            #ActionBtn { background-color: #313244; color: #cdd6f4; border: 1px solid #45475a; border-radius: 4px; padding: 4px 10px; }
-            #ActionBtn:hover { background-color: #45475a; }
-            #ActionBtnLaunch { background-color: #a6e3a1; color: #11111b; border-radius: 4px; padding: 4px 10px; font-weight: bold; }
-            #ActionBtnClose { background-color: #f38ba8; color: #11111b; border-radius: 4px; padding: 4px 10px; font-weight: bold; }
-            #ActionBtnDanger { background-color: transparent; color: #f38ba8; border: 1px solid #f38ba8; border-radius: 4px; padding: 4px 10px; }
-            #ActionBtnDanger:hover { background-color: #f38ba8; color: #11111b; }
-            
-            QTableWidget { background-color: #181825; color: #cdd6f4; gridline-color: #313244; border: none; }
-            QHeaderView::section { background-color: #1e1e2e; color: #bac2de; padding: 8px; border: none; border-bottom: 2px solid #313244; }
+
+            #Sidebar {
+                background-color: #171a23;
+                border-right: 1px solid #2a3040;
+            }
+            #LogoLabel {
+                color: #b5c9ff;
+                font-size: 18px;
+                font-weight: 700;
+                letter-spacing: 0.5px;
+                padding: 22px 16px;
+            }
+
+            QPushButton#SidebarBtn, QPushButton#SidebarBtnActive {
+                background-color: transparent;
+                color: #9eabc6;
+                border: 1px solid transparent;
+                padding: 12px 16px;
+                text-align: left;
+                font-size: 14px;
+                border-radius: 10px;
+                margin: 3px 12px;
+            }
+            QPushButton#SidebarBtn:hover {
+                background-color: #202635;
+                color: #e9efff;
+                border: 1px solid #2f3850;
+            }
+            QPushButton#SidebarBtnActive {
+                background-color: #334869;
+                color: #e9f1ff;
+                border: 1px solid #4a6ca1;
+                font-weight: 700;
+            }
+
+            #PageHeader {
+                font-size: 23px;
+                font-weight: 700;
+                color: #edf2ff;
+                margin-bottom: 12px;
+            }
+
+            #PrimaryBtn {
+                background-color: #4f74b8;
+                color: #f4f8ff;
+                border: 1px solid #5f87d1;
+                border-radius: 8px;
+                padding: 8px 16px;
+                font-weight: 700;
+            }
+            #PrimaryBtn:hover { background-color: #628bd8; }
+            #PrimaryBtn:pressed { background-color: #4567a5; }
+
+            #ActionBtn {
+                background-color: #1d2230;
+                color: #d6dff3;
+                border: 1px solid #36405a;
+                border-radius: 8px;
+                padding: 6px 12px;
+            }
+            #ActionBtn:hover { background-color: #2a3143; }
+
+            #ActionBtnLaunch {
+                background-color: #2f7f56;
+                color: #effff5;
+                border: 1px solid #40a873;
+                border-radius: 8px;
+                padding: 6px 12px;
+                font-weight: 700;
+            }
+            #ActionBtnClose {
+                background-color: #8f3f56;
+                color: #fff4f6;
+                border: 1px solid #ba5977;
+                border-radius: 8px;
+                padding: 6px 12px;
+                font-weight: 700;
+            }
+            #ActionBtnDanger {
+                background-color: transparent;
+                color: #ff8fa9;
+                border: 1px solid #b65a72;
+                border-radius: 8px;
+                padding: 6px 12px;
+            }
+            #ActionBtnDanger:hover {
+                background-color: #a84e67;
+                color: #fff3f6;
+            }
+
+            QTableWidget {
+                background-color: #141824;
+                alternate-background-color: #181d2b;
+                color: #dce4f6;
+                gridline-color: #2b3245;
+                border: 1px solid #2d3549;
+                border-radius: 10px;
+                selection-background-color: #334869;
+                selection-color: #ffffff;
+            }
+            QTableWidget::item { padding: 6px; }
+            QTableCornerButton::section {
+                background-color: #1b2030;
+                border: none;
+                border-bottom: 1px solid #323b53;
+            }
+            QHeaderView::section {
+                background-color: #1b2030;
+                color: #afbdd8;
+                padding: 9px;
+                border: none;
+                border-bottom: 1px solid #323b53;
+                font-weight: 700;
+            }
+
+            QLineEdit, QTextEdit, QComboBox {
+                background-color: #1b2130;
+                color: #deE8ff;
+                border: 1px solid #333d56;
+                border-radius: 8px;
+                padding: 6px 10px;
+            }
+            QLineEdit:focus, QTextEdit:focus, QComboBox:focus {
+                border: 1px solid #5f87d1;
+            }
+
+            QGroupBox {
+                color: #dce5fa;
+                border: 1px solid #2c3346;
+                border-radius: 10px;
+                margin-top: 12px;
+                padding-top: 8px;
+            }
+            QGroupBox::title {
+                subcontrol-origin: margin;
+                left: 12px;
+                padding: 0 6px;
+                color: #b8c8ea;
+            }
         """)
 
     def create_nav_btn(self, text, index):
@@ -201,6 +328,113 @@ class MainWindow(QMainWindow):
             btn.style().unpolish(btn)
             btn.style().polish(btn)
 
+    def _setup_table_behavior(self, table: QTableWidget):
+        table.setAlternatingRowColors(True)
+        table.setSelectionBehavior(QAbstractItemView.SelectionBehavior.SelectRows)
+        table.setSelectionMode(QAbstractItemView.SelectionMode.SingleSelection)
+        table.setEditTriggers(QAbstractItemView.EditTrigger.NoEditTriggers)
+        table.setFocusPolicy(Qt.FocusPolicy.NoFocus)
+
+    def _make_status_chip(self, text: str, kind: str = "neutral"):
+        palette = {
+            "success": ("#143228", "#79e2b1", "#2d7f5d"),
+            "danger": ("#3a1d27", "#ffb0c0", "#9c4d63"),
+            "warn": ("#3c3216", "#ffd98f", "#9f7d31"),
+            "neutral": ("#252b3a", "#c8d4ef", "#4a5777")
+        }
+        bg, fg, border = palette.get(kind, palette["neutral"])
+        label = QLabel(text)
+        label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        label.setStyleSheet(
+            f"background:{bg}; color:{fg}; border:1px solid {border}; border-radius:12px; "
+            f"padding:3px 10px; font-weight:600;"
+        )
+
+        wrapper = QWidget()
+        layout = QHBoxLayout(wrapper)
+        layout.setContentsMargins(8, 8, 8, 8)
+        layout.addWidget(label)
+        layout.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        return wrapper
+
+    def _make_stat_card(self, title: str, initial: str = "0"):
+        card = QFrame()
+        card.setStyleSheet(
+            "QFrame { background:#171d2a; border:1px solid #2e3850; border-radius:10px; }"
+        )
+        layout = QVBoxLayout(card)
+        layout.setContentsMargins(12, 8, 12, 8)
+        layout.setSpacing(2)
+
+        title_lbl = QLabel(title)
+        title_lbl.setStyleSheet("color:#8fa3c8; font-size:11px; font-weight:600;")
+        value_lbl = QLabel(initial)
+        value_lbl.setStyleSheet("color:#edf2ff; font-size:18px; font-weight:800;")
+
+        layout.addWidget(title_lbl)
+        layout.addWidget(value_lbl)
+        card.value_label = value_lbl
+        return card
+
+    def _make_action_btn(self, text: str, obj_name: str = "ActionBtn"):
+        btn = QPushButton(text)
+        btn.setObjectName(obj_name)
+        btn.setMinimumHeight(30)
+        btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        return btn
+
+    def _confirm(self, title: str, text: str):
+        box = QMessageBox(self)
+        box.setWindowTitle(title)
+        box.setText(text)
+        box.setIcon(QMessageBox.Icon.Warning)
+        box.setStandardButtons(QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.Cancel)
+        box.setDefaultButton(QMessageBox.StandardButton.Cancel)
+        box.setStyleSheet(
+            "QMessageBox { background:#151a27; color:#dce4f6; }"
+            "QPushButton { min-width:88px; padding:6px 10px; border-radius:8px;"
+            " background:#1d2230; color:#d6dff3; border:1px solid #36405a; }"
+            "QPushButton:hover { background:#2a3143; }"
+        )
+        return box.exec() == QMessageBox.StandardButton.Yes
+
+    def _sync_empty_hint(self, table: QTableWidget, hint_label: QLabel, text: str):
+        if table.rowCount() == 0:
+            hint_label.setText(text)
+            hint_label.show()
+        else:
+            hint_label.hide()
+
+    def _save_ui_state(self):
+        self.settings["window_geometry"] = [self.x(), self.y(), self.width(), self.height()]
+        self.settings["active_page"] = self.stack.currentIndex()
+        self.settings["table_columns"] = {
+            "profiles": [self.table.columnWidth(i) for i in range(self.table.columnCount())],
+            "proxies": [self.proxy_table.columnWidth(i) for i in range(self.proxy_table.columnCount())],
+            "sync": [self.sync_table.columnWidth(i) for i in range(self.sync_table.columnCount())],
+        }
+        self.save_settings()
+
+    def _restore_ui_state(self):
+        geo = self.settings.get("window_geometry")
+        if isinstance(geo, list) and len(geo) == 4:
+            self.setGeometry(*geo)
+
+        def apply_widths(table, key):
+            cols = self.settings.get("table_columns", {}).get(key, [])
+            if isinstance(cols, list):
+                for i, w in enumerate(cols[:table.columnCount()]):
+                    if isinstance(w, int) and w > 30:
+                        table.setColumnWidth(i, w)
+
+        apply_widths(self.table, "profiles")
+        apply_widths(self.proxy_table, "proxies")
+        apply_widths(self.sync_table, "sync")
+
+        page_index = self.settings.get("active_page", 0)
+        if isinstance(page_index, int) and 0 <= page_index < self.stack.count():
+            self.switch_page(page_index)
+
     def create_profile_page(self):
         page = QWidget()
         layout = QVBoxLayout(page)
@@ -212,12 +446,21 @@ class MainWindow(QMainWindow):
         header_layout.addWidget(header)
         header_layout.addStretch()
         
-        btn_add = QPushButton("+ 新建环境")
-        btn_add.setObjectName("PrimaryBtn")
+        btn_add = self._make_action_btn("＋ 新建环境", "PrimaryBtn")
         btn_add.clicked.connect(self.action_new_profile)
         header_layout.addWidget(btn_add)
         layout.addLayout(header_layout)
-        
+
+        stats_layout = QHBoxLayout()
+        self.profile_stat_total = self._make_stat_card("环境总数")
+        self.profile_stat_running = self._make_stat_card("运行中")
+        self.profile_stat_offline = self._make_stat_card("已关闭")
+        stats_layout.addWidget(self.profile_stat_total)
+        stats_layout.addWidget(self.profile_stat_running)
+        stats_layout.addWidget(self.profile_stat_offline)
+        stats_layout.addStretch()
+        layout.addLayout(stats_layout)
+
         self.table = QTableWidget()
         self.table.setColumnCount(6)
         self.table.setHorizontalHeaderLabels(["ID", "名称", "代理", "备注", "状态", "操作"])
@@ -225,8 +468,15 @@ class MainWindow(QMainWindow):
         self.table.horizontalHeader().setSectionResizeMode(0, QHeaderView.ResizeMode.ResizeToContents)
         self.table.verticalHeader().setVisible(False)
         self.table.verticalHeader().setDefaultSectionSize(50)
+        self._setup_table_behavior(self.table)
         self.table.setSortingEnabled(True) # Enable sorting
         layout.addWidget(self.table)
+
+        self.profile_empty_label = QLabel("暂无环境，点击右上角“＋ 新建环境”开始。")
+        self.profile_empty_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self.profile_empty_label.setStyleSheet("color:#8ea0c5; padding:10px;")
+        layout.addWidget(self.profile_empty_label)
+        self.profile_empty_label.hide()
         return page
 
     def create_proxy_page(self):
@@ -240,24 +490,51 @@ class MainWindow(QMainWindow):
         header_layout.addWidget(header)
         header_layout.addStretch()
         
-        btn_bulk = QPushButton("批量导入")
-        btn_bulk.setObjectName("ActionBtn")
+        btn_bulk_test = self._make_action_btn("◉ 批量测试", "ActionBtn")
+        btn_bulk_test.clicked.connect(self.action_bulk_test_proxies)
+        header_layout.addWidget(btn_bulk_test)
+
+        btn_bulk = self._make_action_btn("⇪ 批量导入", "ActionBtn")
         btn_bulk.clicked.connect(self.action_bulk_proxy)
         header_layout.addWidget(btn_bulk)
-        
-        btn_add = QPushButton("+ 添加代理")
-        btn_add.setObjectName("PrimaryBtn")
+
+        btn_add = self._make_action_btn("＋ 添加代理", "PrimaryBtn")
         btn_add.clicked.connect(self.action_new_proxy)
         header_layout.addWidget(btn_add)
         layout.addLayout(header_layout)
-        
+
+        stats_layout = QHBoxLayout()
+        self.proxy_stat_total = self._make_stat_card("代理总数")
+        self.proxy_stat_ok = self._make_stat_card("可用")
+        self.proxy_stat_fail = self._make_stat_card("不可用")
+        self.proxy_stat_unknown = self._make_stat_card("未测试")
+        stats_layout.addWidget(self.proxy_stat_total)
+        stats_layout.addWidget(self.proxy_stat_ok)
+        stats_layout.addWidget(self.proxy_stat_fail)
+        stats_layout.addWidget(self.proxy_stat_unknown)
+        stats_layout.addStretch()
+        layout.addLayout(stats_layout)
+
         self.proxy_table = QTableWidget()
         self.proxy_table.setColumnCount(7)
         self.proxy_table.setHorizontalHeaderLabels(["ID", "类型", "地址", "国家/地区", "状态", "备注", "操作"])
         self.proxy_table.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeMode.Stretch)
         self.proxy_table.verticalHeader().setVisible(False)
+        self._setup_table_behavior(self.proxy_table)
         self.proxy_table.setSortingEnabled(True)
         layout.addWidget(self.proxy_table)
+
+        self.proxy_progress = QProgressBar()
+        self.proxy_progress.setTextVisible(True)
+        self.proxy_progress.setFormat("批量测试进度 %v/%m")
+        self.proxy_progress.setVisible(False)
+        layout.addWidget(self.proxy_progress)
+
+        self.proxy_empty_label = QLabel("暂无代理，点击“＋ 添加代理”或“⇪ 批量导入”。")
+        self.proxy_empty_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self.proxy_empty_label.setStyleSheet("color:#8ea0c5; padding:10px;")
+        layout.addWidget(self.proxy_empty_label)
+        self.proxy_empty_label.hide()
         return page
 
     def create_sync_page(self):
@@ -270,22 +547,16 @@ class MainWindow(QMainWindow):
         layout.addWidget(header)
         
         controls = QHBoxLayout()
-        btn_tile = QPushButton("一键平铺 (Tile)")
-        btn_tile.setObjectName("ActionBtn")
-        self.btn_tile = QPushButton("一键平铺 (Tile)")
-        self.btn_tile.setObjectName("ActionBtn")
+        self.btn_tile = self._make_action_btn("▦ 一键平铺", "ActionBtn")
         self.btn_tile.clicked.connect(self.action_tile_windows)
-        
-        self.btn_close_all = QPushButton("一键关闭选定")
-        self.btn_close_all.setObjectName("ActionBtnDanger")
+
+        self.btn_close_all = self._make_action_btn("✖ 一键关闭选定", "ActionBtnDanger")
         self.btn_close_all.clicked.connect(self.action_close_all_running)
-        
-        self.btn_refresh = QPushButton("刷新列表")
-        self.btn_refresh.setObjectName("ActionBtn")
+
+        self.btn_refresh = self._make_action_btn("↻ 刷新列表", "ActionBtn")
         self.btn_refresh.clicked.connect(self.load_sync_data)
-        
-        self.btn_start_sync = QPushButton("开启同步控制")
-        self.btn_start_sync.setObjectName("PrimaryBtn")
+
+        self.btn_start_sync = self._make_action_btn("▶ 开启同步控制", "PrimaryBtn")
         self.btn_start_sync.clicked.connect(self.action_start_input_sync)
         
         controls.addWidget(self.btn_tile)
@@ -340,7 +611,14 @@ class MainWindow(QMainWindow):
         self.sync_table.setColumnWidth(0, 50)
         self.sync_table.setColumnWidth(4, 50)
         self.sync_table.verticalHeader().setVisible(False)
+        self._setup_table_behavior(self.sync_table)
         layout.addWidget(self.sync_table)
+
+        self.sync_empty_label = QLabel("当前没有运行中的浏览器，先到“环境管理”启动几个实例。")
+        self.sync_empty_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self.sync_empty_label.setStyleSheet("color:#8ea0c5; padding:10px;")
+        layout.addWidget(self.sync_empty_label)
+        self.sync_empty_label.hide()
         
         self.sync_timer = QTimer(self)
         self.sync_timer.timeout.connect(self.load_sync_data)
@@ -415,24 +693,21 @@ class MainWindow(QMainWindow):
             self.table.setItem(row, 3, QTableWidgetItem(p['notes'] or ""))
             
             is_running = browser_controller.is_running(p['id'])
-            status_item = QTableWidgetItem("运行中 🟢" if is_running else "已关闭 🔴")
-            status_item.setTextAlignment(Qt.AlignmentFlag.AlignCenter)
-            self.table.setItem(row, 4, status_item)
+            status_text = "运行中" if is_running else "已关闭"
+            status_kind = "success" if is_running else "danger"
+            self.table.setCellWidget(row, 4, self._make_status_chip(status_text, status_kind))
             
             widget = QWidget()
             layout = QHBoxLayout(widget)
             layout.setContentsMargins(2, 2, 2, 2)
             
-            btn_launch = QPushButton("关闭" if is_running else "启动")
-            btn_launch.setObjectName("ActionBtnClose" if is_running else "ActionBtnLaunch")
+            btn_launch = self._make_action_btn("■ 关闭" if is_running else "▶ 启动", "ActionBtnClose" if is_running else "ActionBtnLaunch")
             btn_launch.clicked.connect(lambda _, profile=p: self.action_toggle_launch(profile))
-            
-            btn_edit = QPushButton("编辑")
-            btn_edit.setObjectName("ActionBtn")
+
+            btn_edit = self._make_action_btn("✎ 编辑", "ActionBtn")
             btn_edit.clicked.connect(lambda _, profile=p: self.action_edit_profile(profile))
-            
-            btn_del = QPushButton("删除")
-            btn_del.setObjectName("ActionBtnDanger")
+
+            btn_del = self._make_action_btn("🗑 删除", "ActionBtnDanger")
             btn_del.clicked.connect(lambda _, profile=p: self.action_delete_profile(profile))
             
             layout.addWidget(btn_launch)
@@ -453,26 +728,25 @@ class MainWindow(QMainWindow):
             self.proxy_table.setItem(row, 3, QTableWidgetItem(p['region'] or "-"))
             
             status = p['last_status'] or "未测试"
-            status_item = QTableWidgetItem(status)
-            if "成功" in status or "通过" in status: status_item.setForeground(Qt.GlobalColor.green)
-            elif "失败" in status: status_item.setForeground(Qt.GlobalColor.red)
-            self.proxy_table.setItem(row, 4, status_item)
+            if "成功" in status or "通过" in status:
+                self.proxy_table.setCellWidget(row, 4, self._make_status_chip(status, "success"))
+            elif "失败" in status:
+                self.proxy_table.setCellWidget(row, 4, self._make_status_chip(status, "danger"))
+            else:
+                self.proxy_table.setCellWidget(row, 4, self._make_status_chip(status, "warn"))
             self.proxy_table.setItem(row, 5, QTableWidgetItem(p['notes'] or ""))
             
             widget = QWidget()
             layout = QHBoxLayout(widget)
             layout.setContentsMargins(2, 2, 2, 2)
             
-            btn_test = QPushButton("测试")
-            btn_test.setObjectName("ActionBtn")
+            btn_test = self._make_action_btn("◉ 测试", "ActionBtn")
             btn_test.clicked.connect(lambda _, proxy=p: self.action_test_existing_proxy(proxy))
-            
-            btn_edit = QPushButton("编辑")
-            btn_edit.setObjectName("ActionBtn")
+
+            btn_edit = self._make_action_btn("✎ 编辑", "ActionBtn")
             btn_edit.clicked.connect(lambda _, proxy=p: self.action_edit_proxy(proxy))
-            
-            btn_del = QPushButton("删除")
-            btn_del.setObjectName("ActionBtnDanger")
+
+            btn_del = self._make_action_btn("🗑 删除", "ActionBtnDanger")
             btn_del.clicked.connect(lambda _, proxy=p: self.action_delete_proxy(proxy['id']))
             
             layout.addWidget(btn_test)
@@ -481,7 +755,40 @@ class MainWindow(QMainWindow):
             self.proxy_table.setCellWidget(row, 6, widget)
 
         self.proxy_table.setSortingEnabled(True)
+        self.refresh_dashboard_stats()
+        self._sync_empty_hint(self.table, self.profile_empty_label, "暂无环境，点击右上角“＋ 新建环境”开始。")
+        self._sync_empty_hint(self.proxy_table, self.proxy_empty_label, "暂无代理，点击“＋ 添加代理”或“⇪ 批量导入”。")
         self.load_sync_data()
+
+    def refresh_dashboard_stats(self):
+        profiles = getattr(self, 'profiles', [])
+        proxies = getattr(self, 'proxies', [])
+
+        running_count = 0
+        for p in profiles:
+            if browser_controller.is_running(p['id']):
+                running_count += 1
+
+        if hasattr(self, 'profile_stat_total'):
+            self.profile_stat_total.value_label.setText(str(len(profiles)))
+            self.profile_stat_running.value_label.setText(str(running_count))
+            self.profile_stat_offline.value_label.setText(str(max(0, len(profiles) - running_count)))
+
+        ok_count = fail_count = unknown_count = 0
+        for p in proxies:
+            status = (p.get('last_status') or '').strip()
+            if ("成功" in status) or ("通过" in status):
+                ok_count += 1
+            elif ("失败" in status) or ("异常" in status) or ("超时" in status):
+                fail_count += 1
+            else:
+                unknown_count += 1
+
+        if hasattr(self, 'proxy_stat_total'):
+            self.proxy_stat_total.value_label.setText(str(len(proxies)))
+            self.proxy_stat_ok.value_label.setText(str(ok_count))
+            self.proxy_stat_fail.value_label.setText(str(fail_count))
+            self.proxy_stat_unknown.value_label.setText(str(unknown_count))
 
     def load_sync_data(self):
         if self.stack.currentIndex() != 2: return
@@ -519,6 +826,8 @@ class MainWindow(QMainWindow):
             rad_layout.setAlignment(Qt.AlignmentFlag.AlignCenter)
             rad_layout.setContentsMargins(0,0,0,0)
             self.sync_table.setCellWidget(row, 4, rad_widget)
+
+        self._sync_empty_hint(self.sync_table, self.sync_empty_label, "当前没有运行中的浏览器，先到“环境管理”启动几个实例。")
 
     def action_start_input_sync(self):
         # 1. Find Master HWND
@@ -693,8 +1002,11 @@ class MainWindow(QMainWindow):
             for row in range(self.table.rowCount()):
                 pid = int(self.table.item(row, 0).text())
                 is_running = browser_controller.is_running(pid)
-                text = "运行中 🟢" if is_running else "已关闭 🔴"
-                if self.table.item(row, 4).text() != text:
+                status_text = "运行中" if is_running else "已关闭"
+                cell = self.table.cellWidget(row, 4)
+                label = cell.findChild(QLabel) if cell else None
+                current_text = label.text() if label else ""
+                if current_text != status_text:
                     self.load_data()
                     break
 
@@ -711,8 +1023,9 @@ class MainWindow(QMainWindow):
             self.load_data()
 
     def action_delete_profile(self, profile):
-        if browser_controller.is_running(profile['id']): return
-        if QMessageBox.question(self, "确认", f"确定删除 {profile['name']}?") == QMessageBox.StandardButton.Yes:
+        if browser_controller.is_running(profile['id']):
+            return
+        if self._confirm("删除环境", f"确定删除环境「{profile['name']}」吗？\n此操作不可撤销。"):
             database.delete_profile(profile['id'])
             self.load_data()
 
@@ -731,26 +1044,84 @@ class MainWindow(QMainWindow):
             database.update_proxy(p['id'], d['proxy_str'], d['type'], d['notes'])
             self.load_data()
 
+    def update_proxy_row_status(self, proxy_id, status_msg, region):
+        database.update_proxy_status(proxy_id, status_msg, region)
+        for row in range(self.proxy_table.rowCount()):
+            if int(self.proxy_table.item(row, 0).text()) == proxy_id:
+                if "成功" in status_msg or "通过" in status_msg:
+                    kind = "success"
+                elif "失败" in status_msg or "异常" in status_msg or "超时" in status_msg:
+                    kind = "danger"
+                else:
+                    kind = "warn"
+                self.proxy_table.setCellWidget(row, 4, self._make_status_chip(status_msg, kind))
+                self.proxy_table.setItem(row, 3, QTableWidgetItem(region or "-"))
+                break
+        self.proxies = database.get_all_proxies()
+        self.refresh_dashboard_stats()
+
     def action_test_existing_proxy(self, p):
-        def on_fin(_, details):
-            database.update_proxy_status(p['id'], details['status_msg'], details['region'])
-            self.load_data()
+        def on_fin(success, details):
+            self.update_proxy_row_status(p['id'], details.get('status_msg', '未知错误'), details.get('region'))
         tester = TestThread(p['proxy_str'], p['type'])
         tester.finished.connect(on_fin)
         tester.start()
         if not hasattr(self, '_testers'): self._testers = []
         self._testers.append(tester)
+        
+        # update ui immediately for single test
+        for row in range(self.proxy_table.rowCount()):
+            if int(self.proxy_table.item(row, 0).text()) == p['id']:
+                self.proxy_table.setCellWidget(row, 4, self._make_status_chip("测试中...", "neutral"))
+                break
+
+    def action_bulk_test_proxies(self):
+        proxies = database.get_all_proxies()
+        if not proxies:
+            QMessageBox.information(self, "提示", "列表中没有可测试的代理。")
+            return
+
+        if not hasattr(self, '_testers'):
+            self._testers = []
+
+        self.bulk_test_total = len(proxies)
+        self.bulk_test_done = 0
+        self.proxy_progress.setVisible(True)
+        self.proxy_progress.setRange(0, self.bulk_test_total)
+        self.proxy_progress.setValue(0)
+
+        # update ui state
+        for row in range(self.proxy_table.rowCount()):
+            self.proxy_table.setCellWidget(row, 4, self._make_status_chip("测试中...", "neutral"))
+
+        for p in proxies:
+            tester = TestThread(p['proxy_str'], p['type'])
+
+            # create closure to keep proxy_id alive
+            def make_callback(proxy_id):
+                def on_fin(success, details):
+                    self.update_proxy_row_status(proxy_id, details.get('status_msg', '未知错误'), details.get('region'))
+                    self.bulk_test_done += 1
+                    self.proxy_progress.setValue(self.bulk_test_done)
+                    if self.bulk_test_done >= self.bulk_test_total:
+                        self.proxy_progress.setVisible(False)
+                return on_fin
+
+            tester.finished.connect(make_callback(p['id']))
+            tester.start()
+            self._testers.append(tester)
 
     def action_bulk_proxy(self):
-        from PyQt6.QtWidgets import QInputDialog
-        text, ok = QInputDialog.getMultiLineText(self, "导入", "每行一个代理:")
-        if ok and text:
-            for line in text.strip().split('\n'):
-                if line.strip(): database.add_proxy(line.strip())
+        dialog = BulkProxyDialog(self)
+        if dialog.exec():
+            data = dialog.get_data()
+            ptype = data["type"]
+            for proxy_str in data["proxies"]:
+                database.add_proxy(proxy_str, ptype)
             self.load_data()
 
     def action_delete_proxy(self, proxy_id):
-        if QMessageBox.question(self, "确认", "删除此代理?") == QMessageBox.StandardButton.Yes:
+        if self._confirm("删除代理", "确定删除这个代理吗？\n删除后将无法恢复。"):
             database.delete_proxy(proxy_id)
             self.load_data()
 
