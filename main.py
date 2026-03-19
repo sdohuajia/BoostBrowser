@@ -27,6 +27,18 @@ def main():
     import database
     database.init_db()
     
+    # DPI Awareness for Windows EXE
+    import ctypes
+    try:
+        # PROCESS_SYSTEM_DPI_AWARE (1) for Windows 8.1+
+        ctypes.windll.shcore.SetProcessDpiAwareness(1)
+    except Exception:
+        try:
+            # Fallback for Windows 7/8
+            ctypes.windll.user32.SetProcessDPIAware()
+        except Exception:
+            pass
+
     os.environ.setdefault("QT_ENABLE_HIGHDPI_SCALING", "1")
     os.environ.setdefault("QT_AUTO_SCREEN_SCALE_FACTOR", "1")
 
