@@ -44,6 +44,12 @@ from ui_sync_status import SyncStatusWindow
 class MainWindow(QMainWindow):
     def __init__(self):
         super().__init__()
+        # Ensure native title bar and buttons are present
+        self.setWindowFlags(Qt.WindowType.Window | 
+                           Qt.WindowType.WindowMinMaxButtonsHint | 
+                           Qt.WindowType.WindowCloseButtonHint | 
+                           Qt.WindowType.WindowSystemMenuHint)
+        
         self.setWindowTitle("AntigravityAds - 专业多开代理防关联浏览器")
         self.resize(1240, 780)
         self.setMinimumSize(1120, 700)
@@ -123,6 +129,7 @@ class MainWindow(QMainWindow):
     def setup_ui(self):
         self.setWindowIcon(QIcon(resource_path("app.png")))
         main_widget = QWidget()
+        main_widget.setObjectName("CentralWidget")
         self.setCentralWidget(main_widget)
         main_layout = QHBoxLayout(main_widget)
         main_layout.setContentsMargins(0, 0, 0, 0)
@@ -167,7 +174,7 @@ class MainWindow(QMainWindow):
 
         # Style
         self.setStyleSheet("""
-            QMainWindow, QWidget {
+            QWidget#CentralWidget {
                 background-color: #11131a;
                 color: #d9e0ee;
                 font-family: "Microsoft YaHei", "PingFang SC", "Segoe UI";
@@ -418,7 +425,19 @@ class MainWindow(QMainWindow):
     def _restore_ui_state(self):
         geo = self.settings.get("window_geometry")
         if isinstance(geo, list) and len(geo) == 4:
-            self.setGeometry(*geo)
+            x, y, w, h = geo
+            
+            # Additional Safety: Ensure window size is within current screen bounds
+            # This handles cases where the window was saved on a high-DPI or larger screen
+            screen = QApplication.primaryScreen().availableGeometry()
+            w = min(w, screen.width())
+            h = min(h, screen.height())
+            
+            # Ensure window is within screen limits
+            x = max(screen.left(), min(x, screen.right() - 100))
+            y = max(screen.top(), min(y, screen.bottom() - 100))
+            
+            self.setGeometry(x, y, w, h)
 
         def apply_widths(table, key):
             cols = self.settings.get("table_columns", {}).get(key, [])
