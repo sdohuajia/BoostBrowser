@@ -1,5 +1,5 @@
 from PyQt6.QtWidgets import (QDialog, QVBoxLayout, QFormLayout, 
-                               QLineEdit, QTextEdit, QPushButton, QHBoxLayout, QMessageBox, QLabel, QComboBox)
+                               QLineEdit, QTextEdit, QPushButton, QHBoxLayout, QMessageBox, QLabel, QComboBox, QGroupBox)
 from PyQt6.QtCore import Qt
 
 class ProfileDialog(QDialog):
@@ -21,6 +21,12 @@ class ProfileDialog(QDialog):
                 border-radius: 8px; padding: 6px 10px;
             }
             QLineEdit:focus, QTextEdit:focus, QComboBox:focus { border-color: #5f87d1; }
+            QComboBox QAbstractItemView {
+                background-color: #1b2130;
+                color: #e6eeff;
+                selection-background-color: #34405b;
+                outline: none;
+            }
             QPushButton { border-radius: 8px; padding: 7px 14px; border: 1px solid #3a4662; }
             QPushButton:hover { background: #2a3246; }
         """)
@@ -44,8 +50,17 @@ class ProfileDialog(QDialog):
         form_layout.addRow("代理 (Proxy):", self.proxy_input)
 
         self.version_input = QComboBox()
-        self.version_input.addItems(["135", "134", "133", "132", "131", "130", "125", "120", "110", "100", "90"])
+        self.version_input.addItems(["146", "145", "140", "136", "135", "134", "133", "132", "131", "130", "125", "120", "110", "100", "90"])
         form_layout.addRow("内核版本 (Chrome):", self.version_input)
+
+        self.timezone_input = QComboBox()
+        self.timezone_input.setEditable(True)
+        self.timezone_input.addItems(["Auto", "UTC", "Asia/Shanghai", "America/New_York", "Europe/London", "Asia/Tokyo"])
+        form_layout.addRow("时区 (Timezone):", self.timezone_input)
+
+        self.languages_input = QLineEdit()
+        self.languages_input.setPlaceholderText("例如: zh-CN,zh;q=0.9,en;q=0.8")
+        form_layout.addRow("语言 (Languages):", self.languages_input)
 
         self.ua_input = QTextEdit()
         self.ua_input.setPlaceholderText("可留空，默认为所选内核版本的现代 UA")
@@ -67,6 +82,35 @@ class ProfileDialog(QDialog):
         form_layout.addRow("User-Agent:", ua_widget)
 
         layout.addLayout(form_layout)
+
+        # --- Hardware Fingerprinting ---
+        hw_group = QGroupBox("硬件指纹 (Hardware Fingerprinting)")
+        hw_form = QFormLayout()
+        
+        self.memory_input = QComboBox()
+        self.memory_input.addItems(["2", "4", "8", "16", "32"])
+        self.memory_input.setCurrentText("8")
+        hw_form.addRow("设备内存 (GB):", self.memory_input)
+        
+        self.cpu_input = QComboBox()
+        self.cpu_input.addItems(["2", "4", "8", "12", "16", "24", "32"])
+        self.cpu_input.setCurrentText("8")
+        hw_form.addRow("CPU 核心数:", self.cpu_input)
+        
+        self.webgl_vendor_input = QLineEdit()
+        self.webgl_vendor_input.setPlaceholderText("例如: Google Inc. (NVIDIA)")
+        hw_form.addRow("WebGL 厂商:", self.webgl_vendor_input)
+        
+        self.webgl_renderer_input = QLineEdit()
+        self.webgl_renderer_input.setPlaceholderText("例如: ANGLE (NVIDIA, NVIDIA GeForce RTX 3060 ...)")
+        hw_form.addRow("WebGL 渲染器:", self.webgl_renderer_input)
+        
+        self.btn_random_hw = QPushButton("随机硬件指纹")
+        self.btn_random_hw.clicked.connect(self.generate_random_hw)
+        hw_form.addRow("", self.btn_random_hw)
+        
+        hw_group.setLayout(hw_form)
+        layout.addWidget(hw_group)
 
         # Buttons
         btn_layout = QHBoxLayout()
@@ -97,6 +141,28 @@ class ProfileDialog(QDialog):
         ua = f"Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/{version}.0.{build}.{patch} Safari/537.36"
         self.ua_input.setPlainText(ua)
 
+    def generate_random_hw(self):
+        import random
+        # Real-world common hardware profiles
+        memories = ["4", "8", "8", "16", "16", "32"]
+        cpus = ["4", "4", "8", "8", "12", "16"]
+        
+        gpu_profiles = [
+            ("Google Inc. (NVIDIA)", "ANGLE (NVIDIA, NVIDIA GeForce RTX 3060 Direct3D11 vs_5_0 ps_5_0, D3D11)"),
+            ("Google Inc. (NVIDIA)", "ANGLE (NVIDIA, NVIDIA GeForce GTX 1650 Direct3D11 vs_5_0 ps_5_0, D3D11)"),
+            ("Google Inc. (NVIDIA)", "ANGLE (NVIDIA, NVIDIA GeForce RTX 4070 Laptop GPU Direct3D11 vs_5_0 ps_5_0, D3D11)"),
+            ("Google Inc. (Intel)", "ANGLE (Intel, Intel(R) UHD Graphics 630 Direct3D11 vs_5_0 ps_5_0, D3D11)"),
+            ("Google Inc. (Intel)", "ANGLE (Intel, Intel(R) Iris(R) Xe Graphics Direct3D11 vs_5_0 ps_5_0, D3D11)"),
+            ("Google Inc. (ATI Technologies Inc.)", "ANGLE (ATI Technologies Inc., AMD Radeon(TM) Graphics Direct3D11 vs_5_0 ps_5_0, D3D11)")
+        ]
+        
+        self.memory_input.setCurrentText(random.choice(memories))
+        self.cpu_input.setCurrentText(random.choice(cpus))
+        
+        vendor, renderer = random.choice(gpu_profiles)
+        self.webgl_vendor_input.setText(vendor)
+        self.webgl_renderer_input.setText(renderer)
+
     def load_proxies_into_combo(self):
         import database
         self.proxy_input.addItem("") # Empty option for direct connection
@@ -122,6 +188,16 @@ class ProfileDialog(QDialog):
             self.version_input.setCurrentIndex(index)
         else:
             self.version_input.setCurrentText(version)
+            
+        # Hardware
+        self.memory_input.setCurrentText(str(self.profile.get('device_memory', '8')))
+        self.cpu_input.setCurrentText(str(self.profile.get('hardware_concurrency', '8')))
+        self.webgl_vendor_input.setText(self.profile.get('webgl_vendor', 'Google Inc. (NVIDIA)'))
+        self.webgl_renderer_input.setText(self.profile.get('webgl_renderer', 'ANGLE (NVIDIA, NVIDIA GeForce RTX 3060 Direct3D11 vs_5_0 ps_5_0, D3D11)'))
+            
+        # Load new fields
+        self.timezone_input.setCurrentText(self.profile.get('timezone', 'Auto'))
+        self.languages_input.setText(self.profile.get('languages', 'zh-CN,en-US'))
 
     def save_data(self):
         name = self.name_input.text().strip()
@@ -134,7 +210,13 @@ class ProfileDialog(QDialog):
             'notes': self.notes_input.toPlainText().strip(),
             'proxy': self.proxy_input.currentText().strip(),
             'user_agent': self.ua_input.toPlainText().strip(),
-            'chrome_version': self.version_input.currentText().strip() or '133'
+            'chrome_version': self.version_input.currentText().strip() or '133',
+            'device_memory': int(self.memory_input.currentText() or 8),
+            'hardware_concurrency': int(self.cpu_input.currentText() or 8),
+            'webgl_vendor': self.webgl_vendor_input.text().strip(),
+            'webgl_renderer': self.webgl_renderer_input.text().strip(),
+            'timezone': self.timezone_input.currentText().strip(),
+            'languages': self.languages_input.text().strip()
         }
         self.accept()
 

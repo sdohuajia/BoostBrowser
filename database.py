@@ -30,6 +30,12 @@ def init_db():
             proxy TEXT,
             user_agent TEXT,
             chrome_version TEXT DEFAULT '134',
+            device_memory INTEGER DEFAULT 8,
+            hardware_concurrency INTEGER DEFAULT 8,
+            webgl_vendor TEXT DEFAULT 'Google Inc. (NVIDIA)',
+            webgl_renderer TEXT DEFAULT 'ANGLE (NVIDIA, NVIDIA GeForce RTX 3060 Direct3D11 vs_5_0 ps_5_0, D3D11)',
+            timezone TEXT DEFAULT 'Auto',
+            languages TEXT DEFAULT 'zh-CN,en-US',
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         )
     ''')
@@ -63,13 +69,34 @@ def init_db():
     try:
         cursor.execute("ALTER TABLE proxies ADD COLUMN region TEXT")
     except: pass
+    
+    # New hardware columns migration
+    try:
+        cursor.execute("ALTER TABLE profiles ADD COLUMN device_memory INTEGER DEFAULT 8")
+    except: pass
+    try:
+        cursor.execute("ALTER TABLE profiles ADD COLUMN hardware_concurrency INTEGER DEFAULT 8")
+    except: pass
+    try:
+        cursor.execute("ALTER TABLE profiles ADD COLUMN webgl_vendor TEXT DEFAULT 'Google Inc. (NVIDIA)'")
+    except: pass
+    try:
+        cursor.execute("ALTER TABLE profiles ADD COLUMN webgl_renderer TEXT DEFAULT 'ANGLE (NVIDIA, NVIDIA GeForce RTX 3060 Direct3D11 vs_5_0 ps_5_0, D3D11)'")
+    except: pass
+    try:
+        cursor.execute("ALTER TABLE profiles ADD COLUMN timezone TEXT DEFAULT 'Auto'")
+    except: pass
+    try:
+        cursor.execute("ALTER TABLE profiles ADD COLUMN languages TEXT DEFAULT 'zh-CN,en-US'")
+    except: pass
+    
     conn.commit()
     conn.close()
 
 def get_all_profiles():
     conn = get_connection()
     cursor = conn.cursor()
-    cursor.execute('SELECT id, name, notes, proxy, user_agent, chrome_version, created_at FROM profiles')
+    cursor.execute('SELECT id, name, notes, proxy, user_agent, chrome_version, device_memory, hardware_concurrency, webgl_vendor, webgl_renderer, timezone, languages, created_at FROM profiles')
     rows = cursor.fetchall()
     conn.close()
     
@@ -82,30 +109,36 @@ def get_all_profiles():
             'proxy': row[3],
             'user_agent': row[4],
             'chrome_version': row[5],
-            'created_at': row[6]
+            'device_memory': row[6],
+            'hardware_concurrency': row[7],
+            'webgl_vendor': row[8],
+            'webgl_renderer': row[9],
+            'timezone': row[10],
+            'languages': row[11],
+            'created_at': row[12]
         })
     return profiles
 
-def add_profile(name, notes='', proxy='', user_agent='', chrome_version='134'):
+def add_profile(name, notes='', proxy='', user_agent='', chrome_version='134', device_memory=8, hardware_concurrency=8, webgl_vendor='', webgl_renderer='', timezone='Auto', languages='zh-CN,en-US'):
     conn = get_connection()
     cursor = conn.cursor()
     cursor.execute('''
-        INSERT INTO profiles (name, notes, proxy, user_agent, chrome_version)
-        VALUES (?, ?, ?, ?, ?)
-    ''', (name, notes, proxy, user_agent, chrome_version))
+        INSERT INTO profiles (name, notes, proxy, user_agent, chrome_version, device_memory, hardware_concurrency, webgl_vendor, webgl_renderer, timezone, languages)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    ''', (name, notes, proxy, user_agent, chrome_version, device_memory, hardware_concurrency, webgl_vendor, webgl_renderer, timezone, languages))
     conn.commit()
     profile_id = cursor.lastrowid
     conn.close()
     return profile_id
 
-def update_profile(profile_id, name, notes, proxy, user_agent, chrome_version):
+def update_profile(profile_id, name, notes, proxy, user_agent, chrome_version, device_memory=8, hardware_concurrency=8, webgl_vendor='', webgl_renderer='', timezone='Auto', languages='zh-CN,en-US'):
     conn = get_connection()
     cursor = conn.cursor()
     cursor.execute('''
         UPDATE profiles
-        SET name = ?, notes = ?, proxy = ?, user_agent = ?, chrome_version = ?
+        SET name = ?, notes = ?, proxy = ?, user_agent = ?, chrome_version = ?, device_memory = ?, hardware_concurrency = ?, webgl_vendor = ?, webgl_renderer = ?, timezone = ?, languages = ?
         WHERE id = ?
-    ''', (name, notes, proxy, user_agent, chrome_version, profile_id))
+    ''', (name, notes, proxy, user_agent, chrome_version, device_memory, hardware_concurrency, webgl_vendor, webgl_renderer, timezone, languages, profile_id))
     conn.commit()
     conn.close()
 

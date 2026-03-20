@@ -16,10 +16,10 @@ import http.client
 
 # Modern Chrome User-Agents for common operating systems
 MODERN_USER_AGENTS = [
-    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/134.0.6998.35 Safari/537.36",
-    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/133.0.6943.54 Safari/537.36",
-    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/132.0.6834.110 Safari/537.36",
-    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.6778.204 Safari/537.36"
+    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.7100.50 Safari/537.36",
+    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140.0.7000.40 Safari/537.36",
+    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/136.0.6900.30 Safari/537.36",
+    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/135.0.6998.35 Safari/537.36"
 ]
 
 # Logging setup
@@ -81,12 +81,14 @@ def create_proxy_extension(user, password, extension_dir):
     with open(os.path.join(extension_dir, "background.js"), "w", encoding="utf-8") as f:
         f.write(background_js)
 
-def create_stealth_extension(extension_dir):
+def create_stealth_extension(extension_dir, memory=8, cores=8, vendor='', renderer='', ua='', languages='zh-CN,en-US', timezone='Auto', dnt=True):
     os.makedirs(extension_dir, exist_ok=True)
     manifest_json = {
         "manifest_version": 2,
         "name": "Antigravity Browser Stealth",
-        "version": "1.2.0",
+        "version": "1.4.1",
+        "description": "Premium Anti-detection, Timezone & Language Protection",
+        "permissions": ["<all_urls>", "webNavigation"],
         "content_scripts": [
             {
                 "matches": ["<all_urls>"],
@@ -97,61 +99,143 @@ def create_stealth_extension(extension_dir):
         ]
     }
     
-    # This script runs in the 'isolated world' but injects a script tag into the 'main world'
-    content_script_js = """
-    (function() {
-        try {
+    # Defaults
+    memory = memory or 8
+    cores = cores or 8
+    vendor = vendor or "Google Inc. (NVIDIA)"
+    renderer = renderer or "ANGLE (NVIDIA, NVIDIA GeForce RTX 3060 Direct3D11 vs_5_0 ps_5_0, D3D11)"
+    
+    # Parse UA for Client Hints
+    import re
+    chrome_version_match = re.search(r'Chrome/(\d+)', ua)
+    major_version = chrome_version_match.group(1) if chrome_version_match else "134"
+
+    # Languages list
+    lang_list = [l.strip() for l in languages.split(',')] if languages else ['zh-CN', 'zh', 'en-US', 'en']
+    
+    # Timezone injection logic
+    tz_script = ""
+    if timezone and timezone != 'Auto':
+        tz_script = f"""
+            try {{
+                Intl.DateTimeFormat.prototype.resolvedOptions = (original => {{
+                    return function() {{
+                        const options = original.apply(this, arguments);
+                        options.timeZone = "{timezone}";
+                        return options;
+                    }};
+                }})(Intl.DateTimeFormat.prototype.resolvedOptions);
+            }} catch(e) {{}}
+        """
+
+    content_script_js = f"""
+    (function() {{
+        const stealth = function() {{
+            const setProperty = (obj, prop, value) => {{
+                try {{
+                    Object.defineProperty(obj, prop, {{
+                        get: () => value,
+                        set: () => {{}},
+                        enumerable: true,
+                        configurable: true
+                    }});
+                }} catch (e) {{}}
+            }};
+
+            const hideFromToString = (fn) => {{
+                try {{
+                    const originalToString = Function.prototype.toString;
+                    setProperty(fn, 'toString', function() {{
+                        if (this === fn) return `function ${{fn.name}}() {{ [native code] }}`;
+                        return originalToString.call(this);
+                    }});
+                }} catch (e) {{}}
+            }};
+
+            // 1. Better WebDriver Hiding
+            try {{
+                const newProto = Object.getPrototypeOf(navigator);
+                Object.defineProperty(newProto, 'webdriver', {{
+                    get: () => false,
+                    enumerable: true,
+                    configurable: true
+                }});
+            }} catch (e) {{}}
+
+            // 2. Client Hints (userAgentData)
+            if (navigator.userAgentData) {{
+                const uaData = {{
+                    brands: [
+                        {{ brand: 'Not(A:Brand', version: '99' }},
+                        {{ brand: 'Google Chrome', version: '{major_version}' }},
+                        {{ brand: 'Chromium', version: '{major_version}' }}
+                    ],
+                    mobile: false,
+                    platform: 'Windows'
+                }};
+                setProperty(navigator, 'userAgentData', uaData);
+            }}
+
+            // 3. Hardware & Identity
+            setProperty(navigator, 'deviceMemory', {memory});
+            setProperty(navigator, 'hardwareConcurrency', {cores});
+            setProperty(navigator, 'languages', {json.dumps(lang_list)});
+            setProperty(navigator, 'maxTouchPoints', 0);
+            setProperty(navigator, 'pdfViewerEnabled', true);
+            setProperty(navigator, 'doNotTrack', "{'1' if dnt else '0'}");
+
+            // 4. Timezone Mocking
+            {tz_script}
+
+            // 5. Deeper WebGL Masking
+            try {{
+                const getParameter = WebGLRenderingContext.prototype.getParameter;
+                const getParameterProxy = function(parameter) {{
+                    if (parameter === 37445) return "{vendor}";
+                    if (parameter === 37446) return "{renderer}";
+                    return getParameter.apply(this, arguments);
+                }};
+                hideFromToString(getParameterProxy);
+                WebGLRenderingContext.prototype.getParameter = getParameterProxy;
+            }} catch (e) {{}}
+
+            // 6. Rich Plugins
+            try {{
+                const plugins = [
+                    {{ name: 'PDF Viewer', filename: 'internal-pdf-viewer', description: 'Portable Document Format' }},
+                    {{ name: 'Chrome PDF Viewer', filename: 'internal-pdf-viewer', description: 'Portable Document Format' }}
+                ];
+                setProperty(navigator, 'plugins', plugins);
+            }} catch (e) {{}}
+
+            // 7. Automation Property Cleanup
+            const clean = () => {{
+                for (const prop in window) {{
+                    if (prop.startsWith('cdc_') || prop.startsWith('__$')) {{
+                        delete window[prop];
+                    }}
+                }}
+            }};
+            clean();
+            setInterval(clean, 1000);
+            
+            // 8. Chrome Runtime Mock
+            window.chrome = window.chrome || {{}};
+            if (!window.chrome.runtime) {{
+                window.chrome.runtime = {{ 
+                    sendMessage: () => {{}}, 
+                    connect: () => ({{ onMessage: {{ addListener: () => {{}} }}, postMessage: () => {{}} }}) 
+                }};
+            }}
+        }};
+
+        try {{
             const script = document.createElement('script');
-            script.textContent = `
-                (function() {
-                    // 1. Hide navigator.webdriver
-                    try {
-                        const newProto = Object.getPrototypeOf(navigator);
-                        delete newProto.webdriver;
-                        Object.defineProperty(navigator, 'webdriver', { get: () => undefined });
-                    } catch (e) {
-                         Object.defineProperty(navigator, 'webdriver', { get: () => false });
-                    }
-
-                    // 2. Hide navigator.platform
-                    Object.defineProperty(navigator, 'platform', { get: () => 'Win32' });
-
-                    // 3. Mask Languages
-                    Object.defineProperty(navigator, 'languages', { get: () => ['zh-CN', 'zh', 'en-US', 'en'] });
-
-                    // 4. Mock Chrome properties
-                    window.chrome = window.chrome || {
-                        app: { isInstalled: false, installState: () => {}, getDetails: () => {}, getIsInstalled: () => {} },
-                        runtime: {
-                            OnInstalledReason: { INSTALL: 'install', UPDATE: 'update', CHROME_UPDATE: 'chrome_update', SHARED_MODULE_UPDATE: 'shared_module_update' },
-                            OnRestartRequiredReason: { APP_UPDATE: 'app_update', OS_UPDATE: 'os_update', PERIODIC: 'periodic' },
-                            PlatformArch: { ARM: 'arm', ARM64: 'arm64', X86_32: 'x86-32', X86_64: 'x86-64' },
-                            PlatformNaclArch: { ARM: 'arm', X86_32: 'x86-32', X86_64: 'x86-64' },
-                            PlatformOs: { ANDROID: 'android', CROS: 'cros', LINUX: 'linux', MAC: 'mac', OPENBSD: 'openbsd', WIN: 'win' },
-                            RequestUpdateCheckStatus: { THROTTLED: 'throttled', NO_UPDATE: 'no_update', UPDATE_AVAILABLE: 'update_available' }
-                        },
-                        csi: () => {},
-                        loadTimes: () => {}
-                    };
-
-                    // 5. Mask Plugins
-                    const pluginPlaceholder = {
-                        description: "Portable Document Format",
-                        filename: "internal-pdf-viewer",
-                        name: "Chrome PDF Viewer",
-                        0: {type: "application/pdf", suffixes: "pdf", description: "Portable Document Format"}
-                    };
-                    Object.defineProperty(navigator, 'plugins', { get: () => [pluginPlaceholder] });
-                    
-                    console.log('Antigravity Stealth: Success');
-                })();
-            `;
-            document.documentElement.prepend(script);
+            script.textContent = `(${{stealth.toString()}})();`;
+            (document.head || document.documentElement).appendChild(script);
             script.remove();
-        } catch (e) {
-            console.error('Stealth injection failed:', e);
-        }
-    })();
+        }} catch (e) {{}}
+    }})();
     """
     with open(os.path.join(extension_dir, "manifest.json"), "w", encoding="utf-8") as f:
         json.dump(manifest_json, f)
@@ -186,24 +270,42 @@ class BrowserController:
         
         log_debug(f"Launching profile {profile_id}. Chrome: {chrome_exe}")
         
-        # Base arguments
+        # Determine User-Agent - Essential for consistency
+        ua = profile.get('user_agent')
+        if not ua:
+            ver = profile.get('chrome_version', '134')
+            build = random.randint(6000, 7100)
+            patch = random.randint(1, 150)
+            ua = f"Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/{ver}.0.{build}.{patch} Safari/537.36"
+        
+        # Base arguments - Optimized for Stealth and Passing CF
         args = [
             chrome_exe,
             f"--user-data-dir={profile_dir}",
-            # Core Anti-detection flags
+            # Top-tier Anti-detection
             "--disable-blink-features=AutomationControlled",
-            "--disable-infobars",
+            f"--user-agent={ua}",
+            "--do-not-track",
+            # Standard browser flags
             "--no-first-run",
             "--no-default-browser-check",
+            "--disable-infobars",
             "--password-store=basic",
             "--use-mock-keychain",
             "--lang=zh-CN",
-            # Stability and Stealth flags
-            "--disable-features=IsolateOrigins,site-per-process,Translate,OptimizationHints,OptimizationTargetPrediction,OptimizationGuideModelDownloading",
+            # Performance & Stability (Disabling intrusive features)
+            "--disable-features=IsolateOrigins,site-per-process,Translate,OptimizationHints,OptimizationTargetPrediction,OptimizationGuideModelDownloading,InsecureDownloadWarnings",
             "--disable-component-update",
             "--disable-background-timer-throttling",
             "--disable-backgrounding-occluded-windows",
             "--disable-renderer-backgrounding",
+            "--disable-client-side-phishing-detection",
+            "--disable-default-apps",
+            "--disable-extensions-http-throttling",
+            "--disable-popup-blocking",
+            "--metrics-recording-only",
+            # Suppress automation-related logs and features
+            "--test-type",
             "--flag-switches-begin",
             "--disable-blink-features=AutomationControlled",
             "--flag-switches-end"
@@ -211,11 +313,21 @@ class BrowserController:
         
         loaded_extensions = []
         
-        # Always use stealth extension
+        # Always use stealth extension with profile-specific parameters
         stealth_ext_dir = os.path.join(profile_dir, "stealth_ext")
-        create_stealth_extension(stealth_ext_dir)
+        create_stealth_extension(
+            stealth_ext_dir,
+            memory=profile.get('device_memory'),
+            cores=profile.get('hardware_concurrency'),
+            vendor=profile.get('webgl_vendor'),
+            renderer=profile.get('webgl_renderer'),
+            ua=ua,
+            languages=profile.get('languages'),
+            timezone=profile.get('timezone'),
+            dnt=True
+        )
         loaded_extensions.append(stealth_ext_dir)
-        
+
         # Proxy treatment
         if profile.get('proxy'):
             proxy = profile['proxy']
@@ -260,22 +372,6 @@ class BrowserController:
         args.append(f"--remote-debugging-port={debug_port}")
         self.profile_debug_ports[profile_id] = debug_port
         log_debug(f"CDP debug port for profile {profile_id}: {debug_port}")
-        
-        if profile.get('user_agent'):
-            ua = profile['user_agent']
-            # If manually specified UA is suspicious or mismatched, ignore it/use version-matched UA
-            suspicious_markers = ["Android 1.5", "Firefox/5.0", "Opera", "X11", "Linux", "Macintosh", "Intel Mac", "MSIE", "Trident"]
-            if not any(marker in ua for marker in suspicious_markers):
-                args.append(f"--user-agent={ua}")
-            else:
-                ver = profile.get('chrome_version', '134')
-                build = random.randint(6000, 7100)
-                patch = random.randint(1, 150)
-                ua = f"Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/{ver}.0.{build}.{patch} Safari/537.36"
-                log_debug(f"Suspicious UA detected, using version-matched randomized UA: {ua}")
-                args.append(f"--user-agent={ua}")
-        # If no UA is provided, we intentionally DO NOT add --user-agent flag.
-        # This allows Chrome to use its authentic, native User-Agent.
             
         # Target URL
         args.append("https://www.whoer.net")
