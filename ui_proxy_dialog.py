@@ -32,6 +32,12 @@ class ProxyDialog(QDialog):
                 border-radius: 8px; padding: 6px 10px;
             }
             QLineEdit:focus, QTextEdit:focus, QComboBox:focus { border-color: #5f87d1; }
+            QComboBox QAbstractItemView {
+                background-color: #1b2130;
+                color: #e6eeff;
+                selection-background-color: #34405b;
+                outline: none;
+            }
             QPushButton {
                 background: #1d2230; color: #d6dff3; border: 1px solid #36405a;
                 border-radius: 8px; padding: 7px 14px;
@@ -41,6 +47,47 @@ class ProxyDialog(QDialog):
             QPushButton#PrimaryBtn:hover { background: #628bd8; }
             QPushButton#ActionBtn { background-color: #24324c; color: #dbe8ff; border: 1px solid #3f5e94; font-weight: 600; }
             QPushButton#ActionBtn:hover { background: #2f4163; }
+
+            QScrollBar:vertical {
+                border: none;
+                background: #141824;
+                width: 10px;
+                margin: 0px 0 0px 0;
+            }
+            QScrollBar::handle:vertical {
+                background: #34405b;
+                min-height: 20px;
+                border-radius: 5px;
+            }
+            QScrollBar::handle:vertical:hover {
+                background: #4f74b8;
+            }
+            QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical {
+                height: 0px;
+            }
+            QScrollBar::add-page:vertical, QScrollBar::sub-page:vertical {
+                background: none;
+            }
+            QScrollBar:horizontal {
+                border: none;
+                background: #141824;
+                height: 10px;
+                margin: 0 0px 0 0px;
+            }
+            QScrollBar::handle:horizontal {
+                background: #34405b;
+                min-width: 20px;
+                border-radius: 5px;
+            }
+            QScrollBar::handle:horizontal:hover {
+                background: #4f74b8;
+            }
+            QScrollBar::add-line:horizontal, QScrollBar::sub-line:horizontal {
+                width: 0px;
+            }
+            QScrollBar::add-page:horizontal, QScrollBar::sub-page:horizontal {
+                background: none;
+            }
         """)
 
         layout = QVBoxLayout(self)
@@ -77,6 +124,13 @@ class ProxyDialog(QDialog):
         self.proxy_info.setPlaceholderText("可以在此填写您的代理信息\n格式: ip:port 或 user:pass@ip:port")
         self.proxy_info.setMinimumHeight(150)
         layout.addWidget(self.proxy_info)
+        
+        # Usage info for edit mode
+        self.usage_label = QLabel("")
+        self.usage_label.setStyleSheet("color: #ff9f43; font-weight: bold;")
+        self.usage_label.setWordWrap(True)
+        self.usage_label.hide()
+        layout.addWidget(self.usage_label)
         
         # Status Label
         self.status_label = QLabel("等待测试...")
@@ -173,6 +227,23 @@ class ProxyDialog(QDialog):
         # Set window title
         self.setWindowTitle("编辑代理")
         self.btn_save.setText("保存修改")
+        
+        # Check usage
+        import database
+        usage = database.get_proxy_usage_stats()
+        proxy_str = proxy_obj['proxy_str']
+        # Try finding usage with or without scheme
+        profiles = usage.get(proxy_str)
+        if not profiles:
+            # Try prepending scheme if missing but present in DB keys
+            for k in usage.keys():
+                if k.endswith("://" + proxy_str) or k == proxy_str:
+                    profiles = usage[k]
+                    break
+        
+        if profiles:
+            self.usage_label.setText(f"⚠️ 注意: 该代理正被以下环境使用 ({len(profiles)}): " + ", ".join(profiles))
+            self.usage_label.show()
 
     def get_data(self):
         return self.result_data
@@ -188,6 +259,12 @@ class BulkProxyDialog(QDialog):
                 border-radius: 8px; padding: 6px 10px;
             }
             QTextEdit:focus, QComboBox:focus { border-color: #5f87d1; }
+            QComboBox QAbstractItemView {
+                background-color: #1b2130;
+                color: #e6eeff;
+                selection-background-color: #34405b;
+                outline: none;
+            }
             QPushButton {
                 background: #1d2230; color: #d6dff3; border: 1px solid #36405a;
                 border-radius: 8px; padding: 7px 14px;

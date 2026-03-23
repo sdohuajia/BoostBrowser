@@ -273,7 +273,7 @@ class BrowserController:
         # Determine User-Agent - Essential for consistency
         ua = profile.get('user_agent')
         if not ua:
-            ver = profile.get('chrome_version', '134')
+            ver = profile.get('chrome_version', '146')
             build = random.randint(6000, 7100)
             patch = random.randint(1, 150)
             ua = f"Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/{ver}.0.{build}.{patch} Safari/537.36"

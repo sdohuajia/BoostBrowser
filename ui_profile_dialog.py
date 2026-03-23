@@ -1,6 +1,7 @@
 from PyQt6.QtWidgets import (QDialog, QVBoxLayout, QFormLayout, 
                                QLineEdit, QTextEdit, QPushButton, QHBoxLayout, QMessageBox, QLabel, QComboBox, QGroupBox)
 from PyQt6.QtCore import Qt
+from ui_proxy_selector import ProxySelectorDialog
 
 class ProfileDialog(QDialog):
     def __init__(self, parent=None, profile=None):
@@ -11,6 +12,11 @@ class ProfileDialog(QDialog):
         self.setup_ui()
         if profile:
             self.load_data()
+        else:
+            # For new profile: default version 146 and auto-randomize
+            self.version_input.setCurrentText("146")
+            self.generate_random_ua()
+            self.generate_random_hw()
 
     def setup_ui(self):
         self.setStyleSheet("""
@@ -27,8 +33,54 @@ class ProfileDialog(QDialog):
                 selection-background-color: #34405b;
                 outline: none;
             }
-            QPushButton { border-radius: 8px; padding: 7px 14px; border: 1px solid #3a4662; }
+            QPushButton { 
+                background: #1d2230; color: #d6dff3; border: 1px solid #36405a;
+                border-radius: 8px; padding: 7px 14px; 
+            }
             QPushButton:hover { background: #2a3246; }
+            QPushButton#ActionBtn { background-color: #24324c; color: #dbe8ff; border: 1px solid #3f5e94; font-weight: 600; }
+            QPushButton#ActionBtn:hover { background: #2f4163; }
+
+            QScrollBar:vertical {
+                border: none;
+                background: #141824;
+                width: 10px;
+                margin: 0px 0 0px 0;
+            }
+            QScrollBar::handle:vertical {
+                background: #34405b;
+                min-height: 20px;
+                border-radius: 5px;
+            }
+            QScrollBar::handle:vertical:hover {
+                background: #4f74b8;
+            }
+            QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical {
+                height: 0px;
+            }
+            QScrollBar::add-page:vertical, QScrollBar::sub-page:vertical {
+                background: none;
+            }
+            QScrollBar:horizontal {
+                border: none;
+                background: #141824;
+                height: 10px;
+                margin: 0 0px 0 0px;
+            }
+            QScrollBar::handle:horizontal {
+                background: #34405b;
+                min-width: 20px;
+                border-radius: 5px;
+            }
+            QScrollBar::handle:horizontal:hover {
+                background: #4f74b8;
+            }
+            QScrollBar::add-line:horizontal, QScrollBar::sub-line:horizontal {
+                width: 0px;
+            }
+            QScrollBar::add-page:horizontal, QScrollBar::sub-page:horizontal {
+                background: none;
+            }
         """)
 
         layout = QVBoxLayout(self)
@@ -43,11 +95,19 @@ class ProfileDialog(QDialog):
         self.notes_input.setMaximumHeight(80)
         form_layout.addRow("备注信息:", self.notes_input)
 
-        self.proxy_input = QComboBox()
-        self.proxy_input.setEditable(True)
-        self.proxy_input.setPlaceholderText("支持: http://user:pass@ip:port 或从下拉列表选择")
-        self.load_proxies_into_combo()
-        form_layout.addRow("代理 (Proxy):", self.proxy_input)
+        self.proxy_input = QLineEdit()
+        self.proxy_input.setReadOnly(True)
+        self.proxy_input.setPlaceholderText("点击选择代理...")
+        
+        self.btn_select_proxy = QPushButton("选择代理")
+        self.btn_select_proxy.setObjectName("ActionBtn")
+        self.btn_select_proxy.clicked.connect(self.open_proxy_selector)
+        
+        proxy_row = QHBoxLayout()
+        proxy_row.addWidget(self.proxy_input)
+        proxy_row.addWidget(self.btn_select_proxy)
+        
+        form_layout.addRow("代理 (Proxy):", proxy_row)
 
         self.version_input = QComboBox()
         self.version_input.addItems(["146", "145", "140", "136", "135", "134", "133", "132", "131", "130", "125", "120", "110", "100", "90"])
@@ -71,6 +131,7 @@ class ProfileDialog(QDialog):
         ua_layout.addWidget(self.ua_input)
         
         self.btn_random_ua = QPushButton("随机 UA")
+        self.btn_random_ua.setObjectName("ActionBtn")
         self.btn_random_ua.clicked.connect(self.generate_random_ua)
         
         # form_layout.addRow("User-Agent:", ua_layout) # QFormLayout doesn't easily accept layouts as fields without a wrapper
@@ -106,6 +167,7 @@ class ProfileDialog(QDialog):
         hw_form.addRow("WebGL 渲染器:", self.webgl_renderer_input)
         
         self.btn_random_hw = QPushButton("随机硬件指纹")
+        self.btn_random_hw.setObjectName("ActionBtn")
         self.btn_random_hw.clicked.connect(self.generate_random_hw)
         hw_form.addRow("", self.btn_random_hw)
         
@@ -141,6 +203,12 @@ class ProfileDialog(QDialog):
         ua = f"Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/{version}.0.{build}.{patch} Safari/537.36"
         self.ua_input.setPlainText(ua)
 
+    def open_proxy_selector(self):
+        dialog = ProxySelectorDialog(self)
+        if dialog.exec():
+            selected = dialog.get_selected_proxy()
+            self.proxy_input.setText(selected)
+
     def generate_random_hw(self):
         import random
         # Real-world common hardware profiles
@@ -163,26 +231,13 @@ class ProfileDialog(QDialog):
         self.webgl_vendor_input.setText(vendor)
         self.webgl_renderer_input.setText(renderer)
 
-    def load_proxies_into_combo(self):
-        import database
-        self.proxy_input.addItem("") # Empty option for direct connection
-        proxies = database.get_all_proxies()
-        for p in proxies:
-            proxy_str = p['proxy_str']
-            # If it doesn't already have a scheme, prepend it from the type
-            if "://" not in proxy_str and p['type'] and p['type'].lower() != 'http':
-                scheme = p['type'].lower()
-                # For requests/chrome, socks5h is often better but let's use socks5
-                proxy_str = f"{scheme}://{proxy_str}"
-            self.proxy_input.addItem(proxy_str)
-
     def load_data(self):
         self.name_input.setText(self.profile.get('name', ''))
         self.notes_input.setPlainText(self.profile.get('notes', ''))
-        self.proxy_input.setCurrentText(self.profile.get('proxy', ''))
+        self.proxy_input.setText(self.profile.get('proxy', ''))
         self.ua_input.setPlainText(self.profile.get('user_agent', ''))
         
-        version = self.profile.get('chrome_version', '133')
+        version = self.profile.get('chrome_version', '146')
         index = self.version_input.findText(version)
         if index >= 0:
             self.version_input.setCurrentIndex(index)
@@ -205,10 +260,13 @@ class ProfileDialog(QDialog):
             QMessageBox.warning(self, "提示", "环境名称不能为空！")
             return
 
+        # Handle proxy value from proxy input
+        proxy_val = self.proxy_input.text().strip()
+
         self.profile_data = {
             'name': name,
             'notes': self.notes_input.toPlainText().strip(),
-            'proxy': self.proxy_input.currentText().strip(),
+            'proxy': proxy_val,
             'user_agent': self.ua_input.toPlainText().strip(),
             'chrome_version': self.version_input.currentText().strip() or '133',
             'device_memory': int(self.memory_input.currentText() or 8),

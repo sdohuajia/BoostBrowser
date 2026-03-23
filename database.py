@@ -29,7 +29,7 @@ def init_db():
             notes TEXT,
             proxy TEXT,
             user_agent TEXT,
-            chrome_version TEXT DEFAULT '134',
+            chrome_version TEXT DEFAULT '146',
             device_memory INTEGER DEFAULT 8,
             hardware_concurrency INTEGER DEFAULT 8,
             webgl_vendor TEXT DEFAULT 'Google Inc. (NVIDIA)',
@@ -55,7 +55,7 @@ def init_db():
     
     # Simple migration for existing DBs
     try:
-        cursor.execute("ALTER TABLE profiles ADD COLUMN chrome_version TEXT DEFAULT '134'")
+        cursor.execute("ALTER TABLE profiles ADD COLUMN chrome_version TEXT DEFAULT '146'")
     except: pass
     try:
         cursor.execute("ALTER TABLE proxies ADD COLUMN type TEXT DEFAULT 'HTTP'")
@@ -119,7 +119,7 @@ def get_all_profiles():
         })
     return profiles
 
-def add_profile(name, notes='', proxy='', user_agent='', chrome_version='134', device_memory=8, hardware_concurrency=8, webgl_vendor='', webgl_renderer='', timezone='Auto', languages='zh-CN,en-US'):
+def add_profile(name, notes='', proxy='', user_agent='', chrome_version='146', device_memory=8, hardware_concurrency=8, webgl_vendor='', webgl_renderer='', timezone='Auto', languages='zh-CN,en-US'):
     conn = get_connection()
     cursor = conn.cursor()
     cursor.execute('''
@@ -215,6 +215,24 @@ def delete_proxy(proxy_id):
     cursor.execute('DELETE FROM proxies WHERE id = ?', (proxy_id,))
     conn.commit()
     conn.close()
+
+def get_proxy_usage_stats():
+    """Returns a dictionary mapping proxy strings to a list of profile names using them."""
+    conn = get_connection()
+    cursor = conn.cursor()
+    # We match by the proxy column in profiles table
+    cursor.execute('SELECT proxy, name FROM profiles WHERE proxy IS NOT NULL AND proxy != ""')
+    rows = cursor.fetchall()
+    conn.close()
+    
+    usage = {}
+    for row in rows:
+        proxy_str = row[0]
+        profile_name = row[1]
+        if proxy_str not in usage:
+            usage[proxy_str] = []
+        usage[proxy_str].append(profile_name)
+    return usage
 
 if __name__ == '__main__':
     init_db()

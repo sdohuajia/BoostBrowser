@@ -238,7 +238,7 @@ class MainWindow(QMainWindow):
                 color: #d6dff3;
                 border: 1px solid #36405a;
                 border-radius: 8px;
-                padding: 6px 12px;
+                padding: 4px 10px;
             }
             #ActionBtn:hover { background-color: #2a3143; }
 
@@ -247,7 +247,7 @@ class MainWindow(QMainWindow):
                 color: #effff5;
                 border: 1px solid #40a873;
                 border-radius: 8px;
-                padding: 6px 12px;
+                padding: 4px 10px;
                 font-weight: 700;
             }
             #ActionBtnClose {
@@ -255,7 +255,7 @@ class MainWindow(QMainWindow):
                 color: #fff4f6;
                 border: 1px solid #ba5977;
                 border-radius: 8px;
-                padding: 6px 12px;
+                padding: 4px 10px;
                 font-weight: 700;
             }
             #ActionBtnDanger {
@@ -263,7 +263,7 @@ class MainWindow(QMainWindow):
                 color: #ff8fa9;
                 border: 1px solid #b65a72;
                 border-radius: 8px;
-                padding: 6px 12px;
+                padding: 4px 10px;
             }
             #ActionBtnDanger:hover {
                 background-color: #a84e67;
@@ -306,6 +306,13 @@ class MainWindow(QMainWindow):
                 border: 1px solid #5f87d1;
             }
 
+            QComboBox QAbstractItemView {
+                background-color: #1b2130;
+                color: #e6eeff;
+                selection-background-color: #34405b;
+                outline: none;
+            }
+
             QGroupBox {
                 color: #dce5fa;
                 border: 1px solid #2c3346;
@@ -318,6 +325,47 @@ class MainWindow(QMainWindow):
                 left: 12px;
                 padding: 0 6px;
                 color: #b8c8ea;
+            }
+
+            QScrollBar:vertical {
+                border: none;
+                background: #11131a;
+                width: 10px;
+                margin: 0px 0 0px 0;
+            }
+            QScrollBar::handle:vertical {
+                background: #34405b;
+                min-height: 20px;
+                border-radius: 5px;
+            }
+            QScrollBar::handle:vertical:hover {
+                background: #4f74b8;
+            }
+            QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical {
+                height: 0px;
+            }
+            QScrollBar::add-page:vertical, QScrollBar::sub-page:vertical {
+                background: none;
+            }
+            QScrollBar:horizontal {
+                border: none;
+                background: #11131a;
+                height: 10px;
+                margin: 0 0px 0 0px;
+            }
+            QScrollBar::handle:horizontal {
+                background: #34405b;
+                min-width: 20px;
+                border-radius: 5px;
+            }
+            QScrollBar::handle:horizontal:hover {
+                background: #4f74b8;
+            }
+            QScrollBar::add-line:horizontal, QScrollBar::sub-line:horizontal {
+                width: 0px;
+            }
+            QScrollBar::add-page:horizontal, QScrollBar::sub-page:horizontal {
+                background: none;
             }
         """)
 
@@ -352,14 +400,16 @@ class MainWindow(QMainWindow):
         bg, fg, border = palette.get(kind, palette["neutral"])
         label = QLabel(text)
         label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        # Use a more robust style, reduce padding to save space, set a minimum width
         label.setStyleSheet(
-            f"background:{bg}; color:{fg}; border:1px solid {border}; border-radius:12px; "
-            f"padding:3px 10px; font-weight:600;"
+            f"background:{bg}; color:{fg}; border:1px solid {border}; border-radius:4px; "
+            f"padding:2px 6px; font-weight:600;"
         )
+        label.setMinimumWidth(60) # Ensure "已关闭" (3 chars) has enough space
 
         wrapper = QWidget()
         layout = QHBoxLayout(wrapper)
-        layout.setContentsMargins(4, 4, 4, 4)
+        layout.setContentsMargins(0, 0, 0, 0) # Remove container margins
         layout.addWidget(label)
         layout.setAlignment(Qt.AlignmentFlag.AlignCenter)
         return wrapper
@@ -443,6 +493,12 @@ class MainWindow(QMainWindow):
             cols = self.settings.get("table_columns", {}).get(key, [])
             if isinstance(cols, list):
                 for i, w in enumerate(cols[:table.columnCount()]):
+                    # Do NOT restore widths for fixed-width columns that we want to control
+                    # Profiles: 4 (Status), 5 (Action)
+                    # Proxies: 4 (Status), 6 (Action)
+                    if key == "profiles" and i in [4, 5]: continue
+                    if key == "proxies" and i in [4, 6]: continue
+                    
                     if isinstance(w, int) and w > 30:
                         table.setColumnWidth(i, w)
 
@@ -483,10 +539,25 @@ class MainWindow(QMainWindow):
         self.table = QTableWidget()
         self.table.setColumnCount(6)
         self.table.setHorizontalHeaderLabels(["ID", "名称", "代理", "备注", "状态", "操作"])
-        self.table.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeMode.Stretch)
-        self.table.horizontalHeader().setSectionResizeMode(0, QHeaderView.ResizeMode.ResizeToContents)
+        # Setup header resizing
+        header = self.table.horizontalHeader()
+        header.setSectionResizeMode(QHeaderView.ResizeMode.Interactive)
+        # ID: fit to content
+        header.setSectionResizeMode(0, QHeaderView.ResizeMode.ResizeToContents) # ID
+        # Name: stretch
+        header.setSectionResizeMode(1, QHeaderView.ResizeMode.Stretch) # Name
+        # Proxy/Notes: stretch
+        header.setSectionResizeMode(2, QHeaderView.ResizeMode.Stretch) # Proxy
+        header.setSectionResizeMode(3, QHeaderView.ResizeMode.Stretch) # Notes
+        # Status: Fixed width to ensure chip is visible
+        header.setSectionResizeMode(4, QHeaderView.ResizeMode.Fixed)
+        self.table.setColumnWidth(4, 100) # Increased to 100
+        # Action: Fixed width to ensure all 3 buttons are visible
+        header.setSectionResizeMode(5, QHeaderView.ResizeMode.Fixed)
+        self.table.setColumnWidth(5, 280) # Increased to 280 to handle icons and text comfortably
+        
         self.table.verticalHeader().setVisible(False)
-        self.table.verticalHeader().setDefaultSectionSize(50)
+        self.table.verticalHeader().setDefaultSectionSize(55)
         self._setup_table_behavior(self.table)
         self.table.setSortingEnabled(True) # Enable sorting
         layout.addWidget(self.table)
@@ -536,10 +607,22 @@ class MainWindow(QMainWindow):
 
         self.proxy_table = QTableWidget()
         self.proxy_table.setColumnCount(7)
-        self.proxy_table.setHorizontalHeaderLabels(["ID", "类型", "地址", "国家/地区", "状态", "备注", "操作"])
-        self.proxy_table.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeMode.Stretch)
+        # Setup header resizing for proxy table
+        p_header = self.proxy_table.horizontalHeader()
+        p_header.setSectionResizeMode(QHeaderView.ResizeMode.Interactive)
+        p_header.setSectionResizeMode(0, QHeaderView.ResizeMode.ResizeToContents) # ID
+        p_header.setSectionResizeMode(1, QHeaderView.ResizeMode.ResizeToContents) # Type
+        p_header.setSectionResizeMode(4, QHeaderView.ResizeMode.Fixed) # Status
+        self.proxy_table.setColumnWidth(4, 110) # Increased
+        p_header.setSectionResizeMode(6, QHeaderView.ResizeMode.Fixed) # Action
+        self.proxy_table.setColumnWidth(6, 220) # Increased
+        
+        p_header.setSectionResizeMode(2, QHeaderView.ResizeMode.Stretch) # Address
+        p_header.setSectionResizeMode(3, QHeaderView.ResizeMode.Stretch) # Region
+        p_header.setSectionResizeMode(5, QHeaderView.ResizeMode.Stretch) # Notes
+        
         self.proxy_table.verticalHeader().setVisible(False)
-        self.proxy_table.verticalHeader().setDefaultSectionSize(50) # Ensure row height is enough for chips
+        self.proxy_table.verticalHeader().setDefaultSectionSize(55)
         self._setup_table_behavior(self.proxy_table)
         self.proxy_table.setSortingEnabled(True)
         layout.addWidget(self.proxy_table)
@@ -887,6 +970,7 @@ class MainWindow(QMainWindow):
         if not self.status_window:
             self.status_window = SyncStatusWindow()
             self.status_window.stop_requested.connect(self.action_stop_input_sync)
+            self.status_window.tile_requested.connect(self.action_tile_windows)
             self.status_window.config_changed.connect(self.action_update_sync_config)
             
         # Position floating window at top right
@@ -927,7 +1011,7 @@ class MainWindow(QMainWindow):
         if num > 4: cols = 3
         rows = (num + cols - 1) // cols
         
-        desktop = QApplication.primaryScreen().geometry()
+        desktop = QApplication.primaryScreen().availableGeometry()
         w = desktop.width() // cols
         h = desktop.height() // rows
         

@@ -3,6 +3,7 @@ from PyQt6.QtCore import Qt, QPoint, pyqtSignal
 
 class SyncStatusWindow(QWidget):
     stop_requested = pyqtSignal()
+    tile_requested = pyqtSignal()
     config_changed = pyqtSignal(bool, bool) # mouse_enabled, key_enabled
 
     def __init__(self, parent=None):
@@ -37,6 +38,17 @@ class SyncStatusWindow(QWidget):
                 font-size: 13px;
             }
             QPushButton#StopBtn:hover { background-color: #eba0ac; }
+            QPushButton#TileBtn {
+                background-color: #89b4fa;
+                color: #11111b;
+                border: none;
+                border-radius: 6px;
+                padding: 8px;
+                font-weight: bold;
+                font-size: 13px;
+                margin-top: 4px;
+            }
+            QPushButton#TileBtn:hover { background-color: #b4befe; }
         """)
         
         c_layout = QVBoxLayout(container)
@@ -57,6 +69,12 @@ class SyncStatusWindow(QWidget):
         c_layout.addWidget(self.chk_mouse)
         c_layout.addWidget(self.chk_key)
         
+        # Tile Button
+        btn_tile = QPushButton("▦ 一键平铺")
+        btn_tile.setObjectName("TileBtn")
+        btn_tile.clicked.connect(self.tile_requested.emit)
+        c_layout.addWidget(btn_tile)
+        
         # Stop Button
         btn_stop = QPushButton("停止同步")
         btn_stop.setObjectName("StopBtn")
@@ -64,7 +82,7 @@ class SyncStatusWindow(QWidget):
         c_layout.addWidget(btn_stop)
         
         layout.addWidget(container)
-        self.setFixedSize(180, 150)
+        self.setFixedSize(180, 190)
 
     def emit_config(self):
         self.config_changed.emit(self.chk_mouse.isChecked(), self.chk_key.isChecked())

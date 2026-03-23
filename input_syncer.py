@@ -6,13 +6,13 @@ import threading
 import time
 
 class InputSyncer:
+
     def __init__(self):
         self.master_hwnd = None
         self.follower_hwnds = []
         self.active = False
         self.mouse_enabled = True
         self.key_enabled = True
-        
         self.mouse_listener = None
         self.key_listener = None
         self.last_sync_time = 0
@@ -21,11 +21,9 @@ class InputSyncer:
         self.master_hwnd = master_hwnd
         self.follower_hwnds = [h for h in follower_hwnds if h != master_hwnd]
         self.active = True
-        
         # Start Listeners in separate threads
         self.mouse_listener = pynput.mouse.Listener(on_click=self.on_click, on_scroll=self.on_scroll)
         self.key_listener = pynput.keyboard.Listener(on_press=self.on_press, on_release=self.on_release)
-        
         self.mouse_listener.start()
         self.key_listener.start()
 
@@ -39,7 +37,6 @@ class InputSyncer:
                 self.key_listener.stop()
             self.mouse_listener = None
             self.key_listener = None
-            
         threading.Thread(target=_stop_listeners, daemon=True).start()
 
     def is_master_active(self):
@@ -51,35 +48,27 @@ class InputSyncer:
     def on_click(self, x, y, button, pressed):
         if not self.active or not self.mouse_enabled or not self.is_master_active():
             return
-            
         # Convert screen coords to master client coords
         try:
             client_x, client_y = win32gui.ScreenToClient(self.master_hwnd, (int(x), int(y)))
         except: return
-        
         # Build lparam
         lparam = win32api.MAKELONG(client_x, client_y)
-        
         msg = win32con.WM_LBUTTONDOWN if pressed else win32con.WM_LBUTTONUP
         if button == pynput.mouse.Button.right:
             msg = win32con.WM_RBUTTONDOWN if pressed else win32con.WM_RBUTTONUP
-            
         for hwnd in self.follower_hwnds:
             if not win32gui.IsWindow(hwnd): continue
-            
             # Optimization: Send MOUSEMOVE to "wake up" the target area hover state
             if pressed:
                 win32gui.PostMessage(hwnd, win32con.WM_MOUSEMOVE, 0, lparam)
-            
             win32gui.PostMessage(hwnd, msg, win32con.MK_LBUTTON if pressed else 0, lparam)
 
     def on_scroll(self, x, y, dx, dy):
         if not self.active or not self.mouse_enabled or not self.is_master_active():
             return
-        
         delta = 120 if dy > 0 else -120
         wparam = win32api.MAKELONG(0, delta)
-        
         for hwnd in self.follower_hwnds:
             if not win32gui.IsWindow(hwnd): continue
             # WM_MOUSEWHEEL takes screen coords, not client coords
@@ -89,29 +78,27 @@ class InputSyncer:
     def on_press(self, key):
         if not self.active or not self.key_enabled or not self.is_master_active():
             return
-            
         try:
-            # Handle special keys
-            if hasattr(key, 'vk'):
-                vk = key.vk
-            elif hasattr(key, 'value') and hasattr(key.value, 'vk'):
-                vk = key.value.vk
+            char = getattr(key, 'char', None)
+
+            if char:
+                # 可打印字符：只发 WM_CHAR，避免重复输入
+                # WM_KEYDOWN + WM_CHAR 会导致 Chrome 收到两次输入（原 bug 所在）
+                for hwnd in self.follower_hwnds:
+                    if not win32gui.IsWindow(hwnd): continue
+                    win32gui.PostMessage(hwnd, win32con.WM_CHAR, ord(char), 0)
             else:
-                char = getattr(key, 'char', None)
-                if char:
-                    vk = win32api.VkKeyScan(char) & 0xFF
-                else: return
-            
-            for hwnd in self.follower_hwnds:
-                if not win32gui.IsWindow(hwnd): continue
-                
-                # Send KeyDown
-                win32gui.PostMessage(hwnd, win32con.WM_KEYDOWN, vk, 0)
-                
-                # For printable characters, also send WM_CHAR for better compatibility
-                if hasattr(key, 'char') and key.char:
-                    win32gui.PostMessage(hwnd, win32con.WM_CHAR, ord(key.char), 0)
-                    
+                # 特殊键（退格、回车、方向键、Ctrl 等）：只发 WM_KEYDOWN
+                if hasattr(key, 'vk'):
+                    vk = key.vk
+                elif hasattr(key, 'value') and hasattr(key.value, 'vk'):
+                    vk = key.value.vk
+                else:
+                    return
+                for hwnd in self.follower_hwnds:
+                    if not win32gui.IsWindow(hwnd): continue
+                    win32gui.PostMessage(hwnd, win32con.WM_KEYDOWN, vk, 0)
+
         except Exception:
             pass
 
@@ -119,18 +106,22 @@ class InputSyncer:
         if not self.active or not self.key_enabled or not self.is_master_active():
             return
         try:
-            if hasattr(key, 'vk'):
-                vk = key.vk
-            elif hasattr(key, 'value') and hasattr(key.value, 'vk'):
-                vk = key.value.vk
-            else:
-                char = getattr(key, 'char', None)
-                if char:
-                    vk = win32api.VkKeyScan(char) & 0xFF
-                else: return
+            char = getattr(key, 'char', None)
 
-            for hwnd in self.follower_hwnds:
-                if not win32gui.IsWindow(hwnd): continue
-                win32gui.PostMessage(hwnd, win32con.WM_KEYUP, vk, 0)
+            if char:
+                # 可打印字符用 WM_CHAR 处理，on_release 不需要额外操作
+                return
+            else:
+                # 特殊键才需要发 WM_KEYUP
+                if hasattr(key, 'vk'):
+                    vk = key.vk
+                elif hasattr(key, 'value') and hasattr(key.value, 'vk'):
+                    vk = key.value.vk
+                else:
+                    return
+                for hwnd in self.follower_hwnds:
+                    if not win32gui.IsWindow(hwnd): continue
+                    win32gui.PostMessage(hwnd, win32con.WM_KEYUP, vk, 0)
+
         except Exception:
             pass

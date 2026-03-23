@@ -3,6 +3,7 @@ import os
 import asyncio
 from PyQt6.QtWidgets import QApplication
 from PyQt6.QtCore import Qt
+from PyQt6.QtNetwork import QLocalServer, QLocalSocket
 from ui_main_window import MainWindow
 import proxy_relay
 
@@ -45,10 +46,27 @@ def main():
     app = QApplication(sys.argv)
     app.setHighDpiScaleFactorRoundingPolicy(Qt.HighDpiScaleFactorRoundingPolicy.PassThrough)
 
+    # Single Instance Check
+    server_name = "AntigravityAds_SingleInstance_9988"
+    socket = QLocalSocket()
+    socket.connectToServer(server_name)
+    if socket.waitForConnected(500):
+        # Already running, just exit
+        return
+
+    # Clean up old server if it exists
+    QLocalServer.removeServer(server_name)
+    server = QLocalServer()
+    server.listen(server_name)
+
     # Modern style for the app
     app.setStyle("Fusion")
     
     window = MainWindow()
+    
+    # When a new instance tries to start, show the current one
+    server.newConnection.connect(lambda: (window.showNormal(), window.activateWindow(), window.raise_()))
+
     window.show()
     sys.exit(app.exec())
 
