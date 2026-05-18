@@ -1,4 +1,4 @@
-# Antigravity Browser (AntigravityAds)
+最新版本安装包查看v1.3.0，下载即可
 
 一款社交媒体营销设计的指纹浏览器管理工具。支持多账号独立指纹、现代 Windows 内核模拟、高级隐匿补丁以及多窗口同步操作。
 
