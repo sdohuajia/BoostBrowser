@@ -1,3 +1,5 @@
+目前源代码是旧版本的，如需要新的请下载exe安装包
+
 最新版本安装包查看v1.3.0，下载即可
 <img width="1174" height="899" alt="image" src="https://github.com/user-attachments/assets/5f22a80b-ff15-4390-94ad-c834bba821f3" />
 
