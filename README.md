@@ -1,6 +1,6 @@
 目前源代码是旧版本的，如需要新的请下载exe安装包
 
-最新版本安装包查看v1.3.0，下载即可
+最新版本安装包查看v1.6.3，下载即可
 <img width="1174" height="899" alt="image" src="https://github.com/user-attachments/assets/5f22a80b-ff15-4390-94ad-c834bba821f3" />
 
 一款社交媒体营销设计的指纹浏览器管理工具。支持多账号独立指纹、现代 Windows 内核模拟、高级隐匿补丁以及多窗口同步操作。
