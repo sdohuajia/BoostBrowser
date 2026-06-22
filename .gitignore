@@ -1,0 +1,92 @@
+﻿# OS
+.DS_Store
+Thumbs.db
+
+# IDE / Editor
+.vscode/
+.idea/
+.history/
+.kiro/
+*.swp
+*.swo
+
+# Local agent/editor rules
+.windsurfrules
+
+# Logs
+*.log
+*.err
+tmp-frontend-limited-watcher.pid
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+.ant-license.json
+
+# Build outputs
+/bin/
+build/bin/*
+!build/bin/README.md
+build/dist/
+chrome/*
+!chrome/README.md
+*.exe
+*.dll
+*.so
+*.dylib
+
+# Runtime binaries (must be versioned for release/dev convenience)
+!/bin/
+!/bin/README.md
+!/bin/xray.exe
+!/bin/sing-box.exe
+!/bin/linux-amd64/
+!/bin/linux-amd64/xray
+!/bin/linux-amd64/sing-box
+!/bin/linux-arm64/
+!/bin/linux-arm64/xray
+!/bin/linux-arm64/sing-box
+
+# Publish artifacts
+publish/staging/
+publish/output/
+
+# Internal docs / scratch files
+docs/
+DEPLOYMENT_GUIDE.md
+plan.md
+pic/
+
+# Runtime data
+data/*
+!data/README.md
+snapshots/
+app.db
+config.yaml.broken-*
+*.db
+*.sqlite
+*.sqlite3
+proxies.yaml
+profiles.yaml
+
+# Frontend deps/cache
+frontend/node_modules/
+frontend/dist/
+frontend/.vite/
+
+# Python cache
+__pycache__/
+*.pyc
+
+# Local runtime cache
+.tmp/runtime-cache/
+
+# Test outputs / coverage
+coverage/
+*.out
+tmp-debug-port*/
+
+# Env files
+.env
+.env.*
+!.env.example

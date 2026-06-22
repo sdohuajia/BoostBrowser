@@ -1,0 +1,40 @@
+{
+  "name": "boost-browser-frontend",
+  "private": true,
+  "version": "1.6.4",
+  "type": "module",
+  "scripts": {
+    "ensure:native": "node ./scripts/ensure-rollup-native.mjs",
+    "postinstall": "npm run ensure:native",
+    "dev": "node ./scripts/dev-watcher.mjs",
+    "dev:raw": "npm run ensure:native && node --max-old-space-size=256 --max-semi-space-size=16 ./node_modules/vite/bin/vite.js",
+    "build": "npm run ensure:native && node --max-old-space-size=1024 ./node_modules/typescript/bin/tsc && node --max-old-space-size=1024 ./node_modules/vite/bin/vite.js build",
+    "preview": "npm run ensure:native && node --max-old-space-size=256 --max-semi-space-size=16 ./node_modules/vite/bin/vite.js preview"
+  },
+  "dependencies": {
+    "@types/js-yaml": "^4.0.9",
+    "clsx": "^2.0.0",
+    "js-yaml": "^4.1.1",
+    "lucide-react": "^0.292.0",
+    "react": "^18.2.0",
+    "react-dom": "^18.2.0",
+    "react-markdown": "^9.0.1",
+    "react-router-dom": "^6.20.0",
+    "recharts": "^2.10.3",
+    "rehype-raw": "^7.0.0",
+    "rehype-sanitize": "^6.0.0",
+    "remark-gfm": "^4.0.0",
+    "zustand": "^4.4.7"
+  },
+  "devDependencies": {
+    "@types/react": "^18.2.43",
+    "@types/react-dom": "^18.2.17",
+    "@vitejs/plugin-react-swc": "^4.3.0",
+    "autoprefixer": "^10.4.16",
+    "cross-env": "^10.1.0",
+    "postcss": "^8.4.32",
+    "tailwindcss": "^3.3.6",
+    "typescript": "^5.3.3",
+    "vite": "^5.0.8"
+  }
+}

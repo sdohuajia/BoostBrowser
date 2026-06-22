@@ -1,0 +1,31 @@
+/* 奶油主题 - 温暖柔和 */
+
+[data-theme='cream'] {
+  --color-bg-base: #faf7f2;
+  --color-bg-surface: #fffdf8;
+  --color-bg-elevated: #fffdf8;
+  --color-bg-muted: #f3ede4;
+  --color-bg-subtle: #faf7f2;
+
+  --color-border-default: #e6ddd0;
+  --color-border-muted: #f0e9df;
+  --color-border-strong: #d4c7b5;
+
+  --color-text-primary: #44392c;
+  --color-text-secondary: #6b5c4a;
+  --color-text-muted: #a69780;
+  --color-text-inverse: #fffdf8;
+
+  --color-accent: #8b7355;
+  --color-accent-hover: #7a6349;
+  --color-accent-muted: #f3ede4;
+
+  --color-success: #6b9b5a;
+  --color-warning: #c9a227;
+  --color-error: #c45c4a;
+  --color-info: #5a8ab0;
+
+  --shadow-sm: 0 1px 2px 0 rgb(107 92 74 / 0.05);
+  --shadow-md: 0 4px 6px -1px rgb(107 92 74 / 0.08);
+  --shadow-lg: 0 10px 15px -3px rgb(107 92 74 / 0.1);
+}

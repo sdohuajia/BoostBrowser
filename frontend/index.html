@@ -1,0 +1,84 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <link rel="icon" type="image/png" href="/favicon.png" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Boost Browser</title>
+  </head>
+  <body>
+    <div id="root"></div>
+    <div
+      id="dev-boot-status"
+      style="display:none;position:fixed;inset:0;z-index:9999;background:#f6f8fa;color:#1f2937;font-family:'Segoe UI',Tahoma,sans-serif;align-items:center;justify-content:center;"
+    >
+      <div style="padding:16px 20px;border:1px solid #d1d5db;border-radius:8px;background:#ffffff;min-width:320px;">
+        <div style="font-size:14px;font-weight:600;">开发服务连接中...</div>
+        <div id="dev-boot-log" style="margin-top:8px;font-size:12px;color:#4b5563;">等待 Vite dev server 响应</div>
+      </div>
+    </div>
+    <script>
+      ;(function () {
+        var isLocalDevHost =
+          (window.location.protocol === 'http:' || window.location.protocol === 'https:') &&
+          (window.location.hostname === '127.0.0.1' || window.location.hostname === 'localhost')
+        if (!isLocalDevHost) return
+
+        var statusEl = document.getElementById('dev-boot-status')
+        var logEl = document.getElementById('dev-boot-log')
+        var retryCount = 0
+        var hadFailure = false
+        var reloadTriggered = false
+        var timerId = 0
+
+        function setLog(message) {
+          if (logEl) logEl.textContent = message
+        }
+
+        function checkBootStatus() {
+          if (window.__BOOST_APP_BOOTED__) {
+            if (statusEl) statusEl.style.display = 'none'
+            if (timerId) window.clearTimeout(timerId)
+            return
+          }
+
+          fetch('/@vite/client', { cache: 'no-store' })
+            .then(function (resp) {
+              if (resp.ok) {
+                if (hadFailure && !reloadTriggered) {
+                  reloadTriggered = true
+                  setLog('开发服务已恢复，正在重新加载页面...')
+                  window.setTimeout(function () {
+                    window.location.reload()
+                  }, 300)
+                  return
+                }
+
+                timerId = window.setTimeout(checkBootStatus, 1200)
+                return
+              }
+
+              throw new Error('HTTP ' + resp.status)
+            })
+            .catch(function (err) {
+              retryCount += 1
+              hadFailure = true
+              if (statusEl) statusEl.style.display = 'flex'
+              setLog(
+                '连接 Vite 失败，重试 ' +
+                  retryCount +
+                  ' 次（' +
+                  (err && err.message ? err.message : 'network error') +
+                  '）',
+              )
+              timerId = window.setTimeout(checkBootStatus, 1200)
+            })
+        }
+
+        checkBootStatus()
+      })()
+    </script>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>
+

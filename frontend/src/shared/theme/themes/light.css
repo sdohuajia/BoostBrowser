@@ -1,0 +1,31 @@
+/* 浅色主题 - 简洁明亮 */
+
+[data-theme='light'] {
+  --color-bg-base: #f8fafc;
+  --color-bg-surface: #ffffff;
+  --color-bg-elevated: #ffffff;
+  --color-bg-muted: #f1f5f9;
+  --color-bg-subtle: #f8fafc;
+
+  --color-border-default: #e2e8f0;
+  --color-border-muted: #f1f5f9;
+  --color-border-strong: #cbd5e1;
+
+  --color-text-primary: #1e293b;
+  --color-text-secondary: #475569;
+  --color-text-muted: #94a3b8;
+  --color-text-inverse: #ffffff;
+
+  --color-accent: #1e293b;
+  --color-accent-hover: #334155;
+  --color-accent-muted: #f1f5f9;
+
+  --color-success: #22c55e;
+  --color-warning: #f59e0b;
+  --color-error: #ef4444;
+  --color-info: #3b82f6;
+
+  --shadow-sm: 0 1px 2px 0 rgb(0 0 0 / 0.04);
+  --shadow-md: 0 4px 6px -1px rgb(0 0 0 / 0.07), 0 2px 4px -2px rgb(0 0 0 / 0.05);
+  --shadow-lg: 0 10px 15px -3px rgb(0 0 0 / 0.08), 0 4px 6px -4px rgb(0 0 0 / 0.04);
+}
