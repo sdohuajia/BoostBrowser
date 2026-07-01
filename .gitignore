@@ -1,0 +1,38 @@
+﻿# Build artifacts
+build/bin/
+build/release/
+build/darwin/
+publish/output/
+publish/*.nsi
+publish/*.nsh
+publish/*.bmp
+frontend/dist/
+frontend/wailsjs/
+frontend/node_modules/
+frontend/package.json.md5
+
+# Dependencies
+node_modules/
+
+# Logs / temp
+logs/
+*.log
+*.tmp
+*.bak
+
+# Binaries
+*.exe
+*.dll
+*.so
+*.dylib
+
+# IDE
+.idea/
+.vscode/
+*.swp
+.DS_Store
+
+# Local env
+.env
+.env.local
+config.yaml.bak*

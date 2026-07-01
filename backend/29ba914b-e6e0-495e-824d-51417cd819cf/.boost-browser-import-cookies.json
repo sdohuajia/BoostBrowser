@@ -1,0 +1,12 @@
+{
+  "cookies": [
+    {
+      "name": "session",
+      "value": "xyz",
+      "domain": ".x.com",
+      "path": "/",
+      "url": "https://x.com/",
+      "secure": true
+    }
+  ]
+}

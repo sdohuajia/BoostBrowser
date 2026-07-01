@@ -1,0 +1,31 @@
+/* 深色主题 - 沉稳专业 */
+
+[data-theme='dark'] {
+  --color-bg-base: #0c0c0e;
+  --color-bg-surface: #18181b;
+  --color-bg-elevated: #27272a;
+  --color-bg-muted: #27272a;
+  --color-bg-subtle: #18181b;
+
+  --color-border-default: #27272a;
+  --color-border-muted: #1f1f23;
+  --color-border-strong: #3f3f46;
+
+  --color-text-primary: #fafafa;
+  --color-text-secondary: #a1a1aa;
+  --color-text-muted: #71717a;
+  --color-text-inverse: #18181b;
+
+  --color-accent: #fafafa;
+  --color-accent-hover: #e4e4e7;
+  --color-accent-muted: #27272a;
+
+  --color-success: #4ade80;
+  --color-warning: #fbbf24;
+  --color-error: #f87171;
+  --color-info: #60a5fa;
+
+  --shadow-sm: 0 1px 2px 0 rgb(0 0 0 / 0.4);
+  --shadow-md: 0 4px 6px -1px rgb(0 0 0 / 0.5);
+  --shadow-lg: 0 10px 15px -3px rgb(0 0 0 / 0.6);
+}

@@ -1,0 +1,12 @@
+{
+  "cookies": [
+    {
+      "name": "session",
+      "value": "abc",
+      "domain": ".claude.ai",
+      "path": "/",
+      "url": "https://claude.ai/",
+      "secure": true
+    }
+  ]
+}

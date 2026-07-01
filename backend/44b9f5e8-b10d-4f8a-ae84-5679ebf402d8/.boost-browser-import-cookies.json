@@ -1,0 +1,20 @@
+{
+  "cookies": [
+    {
+      "name": "sid",
+      "value": "1",
+      "domain": ".twitter.com",
+      "path": "/",
+      "url": "https://twitter.com/",
+      "secure": true
+    },
+    {
+      "name": "sid2",
+      "value": "2",
+      "domain": "accounts.google.com",
+      "path": "/",
+      "url": "https://accounts.google.com/",
+      "secure": true
+    }
+  ]
+}

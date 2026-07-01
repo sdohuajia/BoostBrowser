@@ -1,0 +1,31 @@
+/* 海洋主题 - 沉稳深邃的蓝 */
+
+[data-theme='ocean'] {
+  --color-bg-base: #f5f8fa;
+  --color-bg-surface: #fafcfd;
+  --color-bg-elevated: #ffffff;
+  --color-bg-muted: #edf2f6;
+  --color-bg-subtle: #f5f8fa;
+
+  --color-border-default: #d5dde5;
+  --color-border-muted: #e6ebf0;
+  --color-border-strong: #bec9d4;
+
+  --color-text-primary: #1c2a36;
+  --color-text-secondary: #3a4d5c;
+  --color-text-muted: #758999;
+  --color-text-inverse: #ffffff;
+
+  --color-accent: #3a5068;
+  --color-accent-hover: #2d4256;
+  --color-accent-muted: #edf2f6;
+
+  --color-success: #3d6b52;
+  --color-warning: #9a7b32;
+  --color-error: #9b4a42;
+  --color-info: #3a5068;
+
+  --shadow-sm: 0 1px 2px 0 rgb(28 42 54 / 0.04);
+  --shadow-md: 0 4px 6px -1px rgb(28 42 54 / 0.06);
+  --shadow-lg: 0 10px 15px -3px rgb(28 42 54 / 0.08);
+}

@@ -1,0 +1,31 @@
+/* 薄荷主题 - 沉稳内敛的绿 */
+
+[data-theme='mint'] {
+  --color-bg-base: #f6f9f8;
+  --color-bg-surface: #fbfdfc;
+  --color-bg-elevated: #ffffff;
+  --color-bg-muted: #eef3f1;
+  --color-bg-subtle: #f6f9f8;
+
+  --color-border-default: #d8e0dc;
+  --color-border-muted: #e8eeeb;
+  --color-border-strong: #c2cdc7;
+
+  --color-text-primary: #1f2d27;
+  --color-text-secondary: #3d4f45;
+  --color-text-muted: #7a8b82;
+  --color-text-inverse: #ffffff;
+
+  --color-accent: #3d5a4c;
+  --color-accent-hover: #2f4a3d;
+  --color-accent-muted: #eef3f1;
+
+  --color-success: #3d6b52;
+  --color-warning: #9a7b32;
+  --color-error: #9b4a42;
+  --color-info: #4a6b8a;
+
+  --shadow-sm: 0 1px 2px 0 rgb(31 45 39 / 0.04);
+  --shadow-md: 0 4px 6px -1px rgb(31 45 39 / 0.06);
+  --shadow-lg: 0 10px 15px -3px rgb(31 45 39 / 0.08);
+}
