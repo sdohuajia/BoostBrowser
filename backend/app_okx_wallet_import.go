@@ -106,24 +106,36 @@ func (a *App) OKXWalletBatchImport(mnemonicsText, password string, profileIDs []
 			// OKX's SES UI is sometimes exposed to Windows UI Automation but hidden
 			// from CDP's DOM and execution contexts. Continue the same flow through
 			// the native accessibility tree before reporting failure.
-			if uiaErr := importOKXWalletViaUIA(mnemonics[i], password); uiaErr == nil {
-				item.Status = "success"
-				result.Succeeded++
+			if uiaErr := importOKXWalletViaUIA(mnemonics[i], password); uiaErr != nil {
+				err = fmt.Errorf("CDP: %v; UI Automation: %v", err, uiaErr)
+				item.Status = "failed"
+				item.Error = err.Error()
+				result.Failed++
 				result.Items = append(result.Items, item)
 				continue
-			} else {
-				err = fmt.Errorf("CDP: %v; UI Automation: %v", err, uiaErr)
 			}
-			item.Status = "failed"
-			item.Error = err.Error()
-			result.Failed++
-		} else {
-			item.Status = "success"
-			result.Succeeded++
 		}
+		completeOKXWalletImport(result, &item, func(profileID string) error {
+			_, err := a.BrowserInstanceStop(profileID)
+			return err
+		})
 		result.Items = append(result.Items, item)
 	}
 	return result, nil
+}
+
+// completeOKXWalletImport reports success only after the verified wallet import
+// has also stopped its browser instance. A failed stop remains visible so the
+// caller can safely retry the close without re-importing the wallet.
+func completeOKXWalletImport(result *OKXWalletImportResult, item *OKXWalletImportItem, stopProfile func(string) error) {
+	if err := stopProfile(item.ProfileID); err != nil {
+		item.Status = "close_failed"
+		item.Error = fmt.Sprintf("wallet imported but automatic instance close failed: %v", err)
+		result.Failed++
+		return
+	}
+	item.Status = "success"
+	result.Succeeded++
 }
 
 func nonEmptyLines(text string) []string {
