@@ -212,7 +212,41 @@ window.onload = () => {
         }
     });
 };
+function patchModernCWSButtons(root = document) {
+    try {
+        const scope = root && root.querySelectorAll ? root : document;
+        scope.querySelectorAll('button').forEach((btn) => {
+            const label = btn.querySelector("span.UywwFc-vQzf8d") || btn.querySelector("span[jsname='V67aGc']");
+            const text = (btn.innerText || btn.textContent || label?.textContent || "").trim();
+            if (label && /Add to Chrome|添加至 Chrome|加到 Chrome/i.test(text)) {
+                modifyNewCWSButton(btn, true);
+            }
+        });
+    } catch (e) {}
+}
+
 if (is_ncws.test(window.location.href)) {
+    const enableModernCWSButtonPatch = () => {
+        patchModernCWSButtons(document);
+        const modernButtonObserver = new MutationObserver(function (mutations) {
+            mutations.forEach((mutation) => {
+                if (mutation.target) patchModernCWSButtons(mutation.target);
+            });
+        });
+        const observeRoot = document.body || document.documentElement;
+        if (observeRoot) modernButtonObserver.observe(observeRoot, { childList: true, subtree: true });
+        let retries = 0;
+        const timer = setInterval(() => {
+            patchModernCWSButtons(document);
+            if (++retries >= 60) clearInterval(timer);
+        }, 500);
+    };
+
+    // Always patch the modern Chrome Web Store disabled button. Some old profiles
+    // have webstore_integration=false or stale extension storage, but the Boost
+    // install bridge should still make the page installable.
+    enableModernCWSButtonPatch();
+
     chrome.storage.sync.get(
         { webstore_integration: true },
         function (stored_values) {

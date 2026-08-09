@@ -24,6 +24,7 @@ var syncState struct {
 	followerIds []string
 	masterId    string
 	active      bool
+	hubSDK      bool
 }
 
 // SyncProfileInfo 同步页面的实例信息
@@ -35,10 +36,23 @@ type SyncProfileInfo struct {
 	Hwnd        int64  `json:"hwnd"`
 	Running     bool   `json:"running"`
 	Status      string `json:"status"` // "running" | "no_window" | "stopped"
+	Source      string `json:"source"` // "native" | "hubsdk"
 }
 
 // GetSyncProfiles 获取所有可用于同步的实例列表
 func (a *App) GetSyncProfiles() []SyncProfileInfo {
+	// The isolated HubSDK test package deliberately owns its sync flow. Its bridge
+	// enumerates both approved roots (test data + explicit production data) and
+	// passes HWNDs directly to HubSDK, so do not fall back to the local DB-only
+	// runtime reconciler in this installation.
+	if a.hubSDKBridgeAvailable() {
+		profiles, err := a.getHubSDKSyncProfiles()
+		if err != nil {
+			a.lifecycleLog("hubsdk-sync-list-failed", "error="+err.Error())
+			return []SyncProfileInfo{}
+		}
+		return profiles
+	}
 	a.reconcileBrowserRuntimeStateOnce()
 	// NOTE: 不要在这里加 browserMgr.Mutex 锁！List() 内部会自行加锁，
 	// 如果外层再锁一次会导致死锁（Go sync.Mutex 不可重入）。
@@ -83,6 +97,9 @@ func (a *App) GetSyncProfiles() []SyncProfileInfo {
 // masterProfileId: 主控实例 ID
 // followerProfileIds: 跟随实例 ID 列表
 func (a *App) StartInputSync(masterProfileId string, followerProfileIds []string) error {
+	if a.hubSDKBridgeAvailable() || isHubSDKProfileID(masterProfileId) {
+		return a.startHubSDKInputSync(masterProfileId, followerProfileIds)
+	}
 	log := logger.New("SyncAPI")
 	a.reconcileBrowserRuntimeStateOnce()
 
@@ -149,6 +166,7 @@ func (a *App) StartInputSync(masterProfileId string, followerProfileIds []string
 	syncState.masterId = masterProfileId
 	syncState.followerIds = validFollowerIds
 	syncState.active = true
+	syncState.hubSDK = false
 	syncState.mu.Unlock()
 
 	log.Info("输入同步已启动",
@@ -164,6 +182,15 @@ func (a *App) StopInputSync() error {
 	log := logger.New("SyncAPI")
 
 	syncState.mu.Lock()
+	useHubSDK := syncState.hubSDK
+	syncState.mu.Unlock()
+	if useHubSDK {
+		if err := a.stopHubSDKInputSync(); err != nil {
+			return err
+		}
+	}
+
+	syncState.mu.Lock()
 	defer syncState.mu.Unlock()
 
 	if syncState.syncer != nil {
@@ -174,6 +201,7 @@ func (a *App) StopInputSync() error {
 	syncState.masterHwnd = 0
 	syncState.masterId = ""
 	syncState.followerIds = nil
+	syncState.hubSDK = false
 
 	log.Info("输入同步已停止")
 	return nil

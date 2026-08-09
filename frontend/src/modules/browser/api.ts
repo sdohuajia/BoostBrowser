@@ -47,6 +47,14 @@ export async function fetchBrowserProfiles(): Promise<BrowserProfile[]> {
   return mockProfiles
 }
 
+export async function importOKXWalletBatch(mnemonicsText: string, password: string, profileIds: string[]) {
+  const bindings: any = await getBindings()
+  const fn = bindings?.OkxWalletBatchImport || (window as any).go?.main?.App?.OkxWalletBatchImport
+  if (!fn) throw new Error('当前 Boost Browser 版本未包含 OKX 批量导入模块')
+  const payload = await fn(mnemonicsText, password, profileIds)
+  return typeof payload === 'string' ? JSON.parse(payload) : payload
+}
+
 export async function fetchBrowserProfilesByTag(tag: string): Promise<BrowserProfile[]> {
   const bindings: any = await getBindings()
   if (bindings?.BrowserProfileListByTag) {

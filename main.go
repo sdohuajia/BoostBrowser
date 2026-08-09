@@ -64,7 +64,19 @@ func envFlagEnabled(name string) bool {
 }
 
 func shouldEnableGlobalWindowWatchers() bool {
+	if envFlagEnabled("BOOST_BROWSER_DISABLE_GLOBAL_WINDOW_WATCHERS") {
+		return false
+	}
 	return envFlagEnabled("BOOST_BROWSER_ENABLE_GLOBAL_WINDOW_WATCHERS")
+}
+
+// The combined global window repair loop remains opt-in because its DevTools
+// restoration path correlated with packaged host restarts. Popup sizing is a
+// narrower policy: one process-wide serialized watcher, visible windows only,
+// and no foreground/ShowWindow calls. Keep that safe path on by default so
+// manually opened OKX/MetaMask/etc. windows cannot remain browser-sized.
+func shouldEnableExtensionPopupSizer() bool {
+	return !envFlagEnabled("BOOST_BROWSER_DISABLE_EXTENSION_POPUP_SIZER")
 }
 
 func shouldEnableTray() bool {
@@ -93,6 +105,21 @@ func NewApp(appRoot string, panelMode bool, version string) *App {
 		app.syncPanelStartedAt = time.Now()
 	}
 	return app
+}
+
+// OKXWalletBatchImport is declared on the Wails-bound root App explicitly.
+// Promoted methods from the embedded backend App are not exported by the
+// Wails bindings generator.
+func (a *App) OkxWalletBatchImport(mnemonicsText, password string, profileIDs []string) (string, error) {
+	result, err := a.App.OKXWalletBatchImport(mnemonicsText, password, profileIDs)
+	if err != nil {
+		return "", err
+	}
+	payload, err := json.Marshal(result)
+	if err != nil {
+		return "", err
+	}
+	return string(payload), nil
 }
 
 func isPostUpdateMode() bool {
@@ -407,11 +434,17 @@ func main() {
 				runtime.WindowCenter(wailsCtx)
 			} else {
 				restoreNativeMainWindowBounds(wailsCtx, app)
+				if shouldEnableExtensionPopupSizer() {
+					app.RecordLifecycleEvent("extension-popup-sizer", []string{"state=enabled", "scope=visible-only", "visibility_calls=disabled"})
+					backend.StartGlobalExtensionPopupSizer(appRoot)
+				} else {
+					app.RecordLifecycleEvent("extension-popup-sizer", []string{"state=disabled", "source=env:BOOST_BROWSER_DISABLE_EXTENSION_POPUP_SIZER"})
+				}
 				if shouldEnableGlobalWindowWatchers() {
 					app.RecordLifecycleEvent("global-window-watchers", []string{"state=enabled", "source=env:BOOST_BROWSER_ENABLE_GLOBAL_WINDOW_WATCHERS"})
 					backend.StartGlobalSerializedWindowWatchers(appRoot)
 				} else {
-					app.RecordLifecycleEvent("global-window-watchers", []string{"state=disabled", "reason=default-off-crashprobe"})
+					app.RecordLifecycleEvent("global-window-watchers", []string{"state=disabled", "reason=default-off-crashfix", "enable_env=BOOST_BROWSER_ENABLE_GLOBAL_WINDOW_WATCHERS"})
 				}
 				if shouldEnableTray() {
 					app.RecordLifecycleEvent("tray", []string{"state=enabled", "source=env:BOOST_BROWSER_ENABLE_TRAY"})

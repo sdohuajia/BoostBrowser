@@ -28,6 +28,20 @@ func TestRemoveExtensionDirFromLaunchArgs(t *testing.T) {
 	}
 }
 
+func TestExtractExtensionIDFromEncodedCRXURL(t *testing.T) {
+	input := "https://clients2.google.com/service/update2/crx?response=redirect&acceptformat=crx2,crx3&prodversion=146.0.7680.177&x=id%3Dmcohilncbfahbmgdjkbpemcciiolgcge%26installsource%3Dondemand%26uc"
+	if got, want := extractExtensionID(input), "mcohilncbfahbmgdjkbpemcciiolgcge"; got != want {
+		t.Fatalf("extractExtensionID() = %q, want %q", got, want)
+	}
+}
+
+func TestExtractExtensionIDFromChromeWebStoreURL(t *testing.T) {
+	input := "https://chromewebstore.google.com/detail/okx-wallet/mcohilncbfahbmgdjkbpemcciiolgcge"
+	if got, want := extractExtensionID(input), "mcohilncbfahbmgdjkbpemcciiolgcge"; got != want {
+		t.Fatalf("extractExtensionID() = %q, want %q", got, want)
+	}
+}
+
 func TestCleanupStaleManagedUnpackedExtensionsRemovesOldDuplicateByManifestName(t *testing.T) {
 	root := t.TempDir()
 	userDataDir := filepath.Join(root, "profile")

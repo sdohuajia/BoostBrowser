@@ -33,3 +33,20 @@ func TestNormalizeRuntimePathKeyIgnoresCaseAndQuotes(t *testing.T) {
 		t.Fatalf("normalized keys differ: %q vs %q", left, right)
 	}
 }
+
+func TestRecoveredRuntimeFilteringSkipsRendererChildren(t *testing.T) {
+	root := normalizeRuntimePathKey(`C:\BoostBrowserTest\data`)
+	top := `"C:\BoostBrowserTest\chrome\cloak\chrome.exe" "--user-data-dir=C:\BoostBrowserTest\data\profile-1" --remote-debugging-port=55089 --no-first-run`
+	renderer := `"C:\BoostBrowserTest\chrome\cloak\chrome.exe" --type=renderer "--user-data-dir=C:\BoostBrowserTest\data\profile-1" --remote-debugging-port=55089`
+	foreign := `"C:\chrome.exe" "--user-data-dir=C:\Temp\profile-1" --remote-debugging-port=55089`
+
+	if !shouldKeepRecoveredRuntimeCommandLine(top, root) {
+		t.Fatalf("top-level Boost browser process should be kept")
+	}
+	if shouldKeepRecoveredRuntimeCommandLine(renderer, root) {
+		t.Fatalf("renderer child should not be treated as a runtime root")
+	}
+	if shouldKeepRecoveredRuntimeCommandLine(foreign, root) {
+		t.Fatalf("foreign user-data-dir should not be recovered")
+	}
+}

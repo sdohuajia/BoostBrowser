@@ -42,6 +42,7 @@ export const navigationConfig: NavSection[] = [
       { name: '标签管理', path: '/browser/tags', icon: 'Tag' },
       { name: '窗口同步', path: '/browser/sync', icon: 'Activity' },
       { name: '扩展管理', path: '/browser/extensions', icon: 'Puzzle' },
+      { name: 'OKX 钱包批量导入', path: '/browser/okx-wallet-import', icon: 'KeyRound' },
     ]
   },
   {

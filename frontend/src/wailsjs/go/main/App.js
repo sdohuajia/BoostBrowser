@@ -178,6 +178,10 @@ export function BrowserProfileRegenerateCode(arg1) {
   return window['go']['main']['App']['BrowserProfileRegenerateCode'](arg1);
 }
 
+export function BrowserProfileRemoveExtension(arg1, arg2) {
+  return window['go']['main']['App']['BrowserProfileRemoveExtension'](arg1, arg2);
+}
+
 export function BrowserProfileSetCode(arg1, arg2) {
   return window['go']['main']['App']['BrowserProfileSetCode'](arg1, arg2);
 }
@@ -344,6 +348,14 @@ export function ListGroups() {
 
 export function MoveInstancesToGroup(arg1, arg2) {
   return window['go']['main']['App']['MoveInstancesToGroup'](arg1, arg2);
+}
+
+export function OKXWalletBatchImport(arg1, arg2, arg3) {
+  return window['go']['main']['App']['OKXWalletBatchImport'](arg1, arg2, arg3);
+}
+
+export function OkxWalletBatchImport(arg1, arg2, arg3) {
+  return window['go']['main']['App']['OkxWalletBatchImport'](arg1, arg2, arg3);
 }
 
 export function OpenCorePath(arg1) {

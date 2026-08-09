@@ -2,6 +2,7 @@ package backend
 
 import (
 	"net/url"
+	"os"
 	"strings"
 	"sync"
 	"time"
@@ -14,6 +15,30 @@ type lastTabsTracker struct {
 	debugPort int
 	stopCh    chan struct{}
 	stopOnce  sync.Once
+}
+
+func lastTabsTrackerEnabled() bool {
+	value := strings.TrimSpace(strings.ToLower(os.Getenv("BOOST_BROWSER_ENABLE_LAST_TABS_TRACKER")))
+	switch value {
+	case "", "1", "true", "yes", "on":
+		return true
+	case "0", "false", "no", "off":
+		return false
+	default:
+		return true
+	}
+}
+
+func windowBoundsTrackerEnabled() bool {
+	value := strings.TrimSpace(strings.ToLower(os.Getenv("BOOST_BROWSER_ENABLE_WINDOW_BOUNDS_TRACKER")))
+	switch value {
+	case "", "1", "true", "yes", "on":
+		return true
+	case "0", "false", "no", "off":
+		return false
+	default:
+		return true
+	}
 }
 
 func (t *lastTabsTracker) stop() {
@@ -104,6 +129,12 @@ func (a *App) updateProfileLastTabsLocked(profile *BrowserProfile, tabs []string
 
 func (a *App) startLastTabsTracker(profileId string, debugPort int) {
 	if a == nil || a.browserMgr == nil || profileId == "" || debugPort <= 0 {
+		return
+	}
+	// 保存上次普通网页标签页默认开启：Chrome 原生 session restore 会在启动前被清理，
+	// 如果这里不开，用户关闭实例后的最新网页就不会落库，下次只能恢复旧记录。
+	// 如需临时隔离稳定性问题，可设置 BOOST_BROWSER_ENABLE_LAST_TABS_TRACKER=0 关闭。
+	if !lastTabsTrackerEnabled() {
 		return
 	}
 

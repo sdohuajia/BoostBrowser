@@ -96,6 +96,8 @@ export function BrowserProfileRandomizeFingerprint(arg1:string):Promise<browser.
 
 export function BrowserProfileRegenerateCode(arg1:string):Promise<string>;
 
+export function BrowserProfileRemoveExtension(arg1:Array<string>,arg2:string):Promise<backend.ExtensionImportResult>;
+
 export function BrowserProfileSetCode(arg1:string,arg2:string):Promise<string>;
 
 export function BrowserProfileSetKeywords(arg1:string,arg2:Array<string>):Promise<browser.Profile>;
@@ -179,6 +181,10 @@ export function IsWindowSyncPanelMode():Promise<boolean>;
 export function ListGroups():Promise<Array<browser.GroupWithCount>>;
 
 export function MoveInstancesToGroup(arg1:Array<string>,arg2:string):Promise<void>;
+
+export function OKXWalletBatchImport(arg1:string,arg2:string,arg3:Array<string>):Promise<backend.OKXWalletImportResult>;
+
+export function OkxWalletBatchImport(arg1:string,arg2:string,arg3:Array<string>):Promise<string>;
 
 export function OpenCorePath(arg1:string):Promise<void>;
 

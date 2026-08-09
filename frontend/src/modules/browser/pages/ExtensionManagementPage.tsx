@@ -71,6 +71,22 @@ function saveExtensions(items: ManagedExtension[]) {
   localStorage.setItem(STORAGE_KEY, JSON.stringify(items))
 }
 
+// Instance names are user-facing ordinal labels (for example, "实例-2").
+// localeCompare without numeric mode puts "实例-131" before "实例-25", which
+// makes manual assignment easy to misread and breaks one-line-per-instance
+// batch data. Keep this ordering in the extension manager regardless of the
+// database's insertion order.
+function sortProfilesNaturally(items: BrowserProfile[]) {
+  return [...items].sort((left, right) => {
+    const leftName = left.profileName || left.profileId
+    const rightName = right.profileName || right.profileId
+    return leftName.localeCompare(rightName, 'zh-CN', {
+      numeric: true,
+      sensitivity: 'base',
+    })
+  })
+}
+
 function extensionIcon(name: string) {
   const text = (name || 'E').trim().slice(0, 1).toUpperCase()
   const palettes = [
@@ -107,7 +123,9 @@ export function ExtensionManagementPage() {
   })
 
   useEffect(() => {
-    fetchBrowserProfiles().then(setProfiles).catch(() => setProfiles([]))
+    fetchBrowserProfiles()
+      .then(items => setProfiles(sortProfilesNaturally(items)))
+      .catch(() => setProfiles([]))
   }, [])
 
   useEffect(() => {
@@ -170,6 +188,18 @@ export function ExtensionManagementPage() {
       }
     })
   }
+
+  const toggleAllProfiles = () => {
+    setForm(prev => {
+      const profileIds = profiles.map(profile => profile.profileId)
+      const selectedIds = new Set(prev.profileIds)
+      const allSelected = profileIds.length > 0 && profileIds.every(id => selectedIds.has(id))
+      return { ...prev, profileIds: allSelected ? [] : profileIds }
+    })
+  }
+
+  const allProfilesSelected = profiles.length > 0
+    && profiles.every(profile => form.profileIds.includes(profile.profileId))
 
   const submitExtension = async () => {
     const name = form.name.trim()
@@ -397,9 +427,19 @@ export function ExtensionManagementPage() {
 
           {form.distributionMode === 'manual' ? (
             <div className="rounded-xl border border-[var(--color-border-default)] overflow-hidden">
-              <div className="flex items-center justify-between px-4 py-3 bg-[var(--color-bg-muted)] border-b border-[var(--color-border-muted)]">
+              <div className="flex items-center justify-between gap-3 px-4 py-3 bg-[var(--color-bg-muted)] border-b border-[var(--color-border-muted)]">
                 <div className="text-sm font-medium text-[var(--color-text-primary)]">选择分配实例</div>
-                <div className="text-xs text-[var(--color-text-muted)]">已选 {selectedCount} 个</div>
+                <div className="flex items-center gap-3">
+                  <div className="text-xs text-[var(--color-text-muted)]">已选 {selectedCount} 个</div>
+                  <button
+                    type="button"
+                    onClick={toggleAllProfiles}
+                    disabled={profiles.length === 0}
+                    className="text-xs font-medium text-[var(--color-accent)] hover:opacity-80 disabled:cursor-not-allowed disabled:opacity-40"
+                  >
+                    {allProfilesSelected ? '取消全选' : '全选'}
+                  </button>
+                </div>
               </div>
               <div className="max-h-56 overflow-auto divide-y divide-[var(--color-border-muted)]">
                 {profiles.length === 0 ? (

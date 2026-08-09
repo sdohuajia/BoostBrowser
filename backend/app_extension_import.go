@@ -164,6 +164,32 @@ func normalizeProfileIDs(ids []string) []string {
 
 func extractExtensionID(input string) string {
 	lower := strings.ToLower(strings.TrimSpace(input))
+	if lower == "" {
+		return ""
+	}
+
+	if u, err := url.Parse(lower); err == nil {
+		// Chrome update URLs carry the real extension id inside x=id%3D<id>%26...
+		// A raw [a-p]{32} scan can accidentally include the trailing 'd' from "%3d",
+		// producing ids like dmcohil... and binding a bogus unpacked path.
+		if x := u.Query().Get("x"); x != "" {
+			if vals, err := url.ParseQuery(x); err == nil {
+				if id := strings.TrimSpace(vals.Get("id")); chromeWebStoreIDPattern.MatchString(id) && len(id) == 32 {
+					return id
+				}
+			}
+		}
+		for _, part := range strings.FieldsFunc(u.Path, func(r rune) bool { return r == '/' || r == '\\' }) {
+			if chromeWebStoreIDPattern.MatchString(part) && len(part) == 32 {
+				return part
+			}
+		}
+	}
+
+	trimmed := strings.Trim(lower, " /\\	\r\n")
+	if chromeWebStoreIDPattern.MatchString(trimmed) && len(trimmed) == 32 {
+		return trimmed
+	}
 	if m := chromeWebStoreIDPattern.FindString(lower); m != "" {
 		return m
 	}
@@ -736,6 +762,43 @@ func safePathName(name string) string {
 		return "extension"
 	}
 	return b.String()
+}
+
+// enableDeveloperModeForManagedUnpackedExtensions makes Chrome accept extensions
+// that Boost loads from its managed unpacked-extension directory. Chrome disables
+// such extensions when the profile has Developer mode off, even though their
+// --load-extension argument was written successfully.
+func enableDeveloperModeForManagedUnpackedExtensions(userDataDir string, args []string) {
+	if userDataDir == "" || len(activeLoadExtensionDirs(args)) == 0 {
+		return
+	}
+	for _, prefPath := range chromeProfilePreferencePaths(userDataDir) {
+		data, err := os.ReadFile(prefPath)
+		if err != nil || len(strings.TrimSpace(string(data))) == 0 {
+			continue
+		}
+		var prefs map[string]any
+		if json.Unmarshal(data, &prefs) != nil {
+			continue
+		}
+		extensions, ok := prefs["extensions"].(map[string]any)
+		if !ok {
+			extensions = make(map[string]any)
+			prefs["extensions"] = extensions
+		}
+		ui, ok := extensions["ui"].(map[string]any)
+		if !ok {
+			ui = make(map[string]any)
+			extensions["ui"] = ui
+		}
+		if enabled, _ := ui["developer_mode"].(bool); enabled {
+			continue
+		}
+		ui["developer_mode"] = true
+		if out, err := json.Marshal(prefs); err == nil {
+			_ = os.WriteFile(prefPath, out, 0644)
+		}
+	}
 }
 
 // pinAllLoadedExtensionsToToolbar ensures all extensions loaded via --load-extension

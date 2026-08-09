@@ -326,19 +326,22 @@ chrome.runtime.onMessageExternal.addListener(function (
             return true;
         case "beginInstallWithManifest3":
             var [extInfo, href, ..._] = request.args;
-
-            promptInstall(
-                buildExtensionUrl(href),
-                true,
-                WEBSTORE.chrome,
-                msgHandler,
-            );
-            sendResponse({
-                // because a "cancel" in the context of chromium-web-store won't be detected,
-                // we must throw user_cancelled here to ensure the button doesn't get stuck on loading spinner.
-                // The behaviour of this is similar to sending success ("") so this should be fine.
-                args: ["user_cancelled"],
-            });
+            boostInstallFromStore(buildExtensionUrl(href))
+                .then((result) => {
+                    if (!result || !result.ok) {
+                        console.warn("[BoostInstall] beginInstallWithManifest3 failed:", result);
+                    }
+                    sendResponse({
+                        // CWS expects a callback result here; return user_cancelled so
+                        // its spinner clears while Boost Browser's local installer owns
+                        // the actual install/update of --load-extension.
+                        args: ["user_cancelled"],
+                    });
+                })
+                .catch((e) => {
+                    console.warn("[BoostInstall] beginInstallWithManifest3 error:", e);
+                    sendResponse({ args: ["user_cancelled"] });
+                });
             return true;
     }
 });

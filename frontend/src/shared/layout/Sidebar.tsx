@@ -18,6 +18,7 @@ import {
   Tag,
   Bot,
   Puzzle,
+  KeyRound,
   type LucideIcon
 } from 'lucide-react'
 import clsx from 'clsx'
@@ -46,6 +47,7 @@ const iconMap: Record<string, LucideIcon> = {
   Tag,
   Bot,
   Puzzle,
+  KeyRound,
 }
 
 function getIcon(iconName: string): LucideIcon {

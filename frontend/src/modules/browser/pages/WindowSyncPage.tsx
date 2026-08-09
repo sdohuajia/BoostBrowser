@@ -17,7 +17,7 @@ import {
 } from 'lucide-react'
 import { Button, Input, Select, toast } from '../../../shared/components'
 import { CloseWindowSyncPanel, IsWindowSyncPanelMode } from '../../../wailsjs/go/main/App'
-import { EventsOn, ScreenGetAll, WindowCenter, WindowSetAlwaysOnTop, WindowSetMinSize, WindowSetPosition, WindowSetSize, WindowShow, WindowUnminimise } from '../../../wailsjs/runtime/runtime'
+import { EventsOn, ScreenGetAll, WindowSetAlwaysOnTop, WindowSetMinSize, WindowSetPosition, WindowSetSize, WindowShow, WindowUnminimise } from '../../../wailsjs/runtime/runtime'
 import {
   getSyncProfiles,
   getSyncStatus,
@@ -64,6 +64,9 @@ export function WindowSyncPage() {
   const compactPanelRef = useRef<HTMLDivElement | null>(null)
   const compactPanelLeaveTimerRef = useRef<ReturnType<typeof window.setTimeout> | null>(null)
   const syncPanelWindowBootstrappedRef = useRef(false)
+  // Compact panel starts at a predictable top-center location once. Do not
+  // reposition it on hover/expand/collapse: the user may already have dragged it.
+  const syncPanelInitialPositionedRef = useRef(false)
   const [syncPanelMode, setSyncPanelMode] = useState(false)
   const [panelPresentation, setPanelPresentation] = useState<'compact' | 'full'>('full')
   const [showSyncControls, setShowSyncControls] = useState(false)
@@ -291,7 +294,10 @@ export function WindowSyncPage() {
         WindowUnminimise()
         syncPanelWindowBootstrappedRef.current = true
       }
-      if (shouldPinTop) {
+      // Place the compact floating panel at a predictable default only once per
+      // sync-panel process. Later hover expansion/collapse must preserve a
+      // position the user chose by dragging the header.
+      if (shouldPinTop && !syncPanelInitialPositionedRef.current) {
         try {
           const screens = await ScreenGetAll()
           const current = screens.find(screen => screen.isCurrent) || screens.find(screen => screen.isPrimary) || screens[0]
@@ -301,12 +307,14 @@ export function WindowSyncPage() {
             const x = Math.round(currentX + (current.width - target.width) / 2)
             const y = Math.round(currentY + PANEL_TOP_MARGIN_PX)
             WindowSetPosition(x, y)
+            syncPanelInitialPositionedRef.current = true
             return
           }
         } catch {
         }
       }
-      WindowCenter()
+      // An expanded page deliberately keeps the current position. The compact
+      // floating panel is the only presentation that receives a default location.
     }
 
     const timer = window.setTimeout(() => {
@@ -663,7 +671,11 @@ export function WindowSyncPage() {
           onMouseEnter={handleCompactPanelMouseEnter}
           onMouseLeave={handleCompactPanelMouseLeave}
         >
-          <div className="flex min-h-[42px] items-center gap-3" style={{ ['--wails-draggable' as any]: 'drag' }}>
+          <div
+            className="flex min-h-[42px] cursor-grab select-none items-center gap-3 active:cursor-grabbing"
+            style={{ ['--wails-draggable' as any]: 'drag' }}
+            title="按住此区域可拖动同步浮窗"
+          >
             <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-white/14 text-white shadow-[inset_0_0_0_1px_rgba(255,255,255,0.08)]">
               <Monitor className="h-4 w-4" />
             </div>

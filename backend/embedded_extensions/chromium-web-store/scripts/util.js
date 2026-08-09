@@ -213,7 +213,7 @@ async function boostInstallFromStore(crx_url) {
         r = await fetch(url, {
             method: "POST",
             headers: headers,
-            body: JSON.stringify({ crxUrl: crx_url }),
+            body: JSON.stringify({ crxUrl: crx_url, profileId: cfg.profileId || "" }),
         });
     } catch (e) {
         return { ok: false, status: 0, error: "fetch failed: " + String(e) };

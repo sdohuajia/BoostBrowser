@@ -42,6 +42,7 @@ const TagManagementPage = lazyNamed(() => import('./modules/browser/pages/TagMan
 import { UpdateChecker } from './modules/updater/UpdateChecker'
 const WindowSyncPage = lazyNamed(() => import('./modules/browser/pages/WindowSyncPage'), 'WindowSyncPage')
 const ExtensionManagementPage = lazyNamed(() => import('./modules/browser/pages/ExtensionManagementPage'), 'ExtensionManagementPage')
+const OKXWalletImportPage = lazyNamed(() => import('./modules/browser/pages/OKXWalletImportPage'), 'OKXWalletImportPage')
 const AutomationPage = lazyNamed(() => import('./modules/browser/pages/AutomationPage'), 'AutomationPage')
 const UsageTutorialPage = lazyNamed(() => import('./modules/browser/pages/UsageTutorialPage'), 'UsageTutorialPage')
 const QuickLaunchModal = lazyNamed(() => import('./modules/browser/components/QuickLaunchModal'), 'QuickLaunchModal')
@@ -494,6 +495,7 @@ function App() {
                   <Route path="/browser/tags" element={<TagManagementPage />} />
                   <Route path="/browser/sync" element={<Navigate to="/browser/list" replace />} />
                   <Route path="/browser/extensions" element={<ExtensionManagementPage />} />
+                  <Route path="/browser/okx-wallet-import" element={<OKXWalletImportPage />} />
                   <Route path="/system/tutorial" element={<UsageTutorialPage />} />
                 </>
               )}

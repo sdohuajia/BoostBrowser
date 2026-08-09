@@ -238,3 +238,19 @@ func TestNeedsGenericExtensionPopupResizeRejectsMainBrowserWindowTitle(t *testin
 		t.Fatalf("main browser window title must not be clamped as generic extension popup")
 	}
 }
+
+func TestNeedsGenericExtensionPopupResizeRejectsNormalXBrowserWindow(t *testing.T) {
+	if needsGenericExtensionPopupResize("(3) 主页 / X", "Chrome_WidgetWin_1", 1280, 900) {
+		t.Fatalf("normal X browser page must not be clamped as a generic extension popup")
+	}
+	if needsGenericExtensionPopupResize("主页 / X", "Chrome_WidgetWin_1", 980, 860) {
+		t.Fatalf("normal X browser page without product suffix must not be clamped")
+	}
+}
+
+func TestShouldRestoreGenericExtensionPopupWindowRejectsNormalXBrowserWindow(t *testing.T) {
+	rect := winRect{Left: -32000, Top: -32000, Right: -30720, Bottom: -31100}
+	if shouldRestoreGenericExtensionPopupWindow("(3) 主页 / X", "Chrome_WidgetWin_1", rect) {
+		t.Fatalf("offscreen normal X browser page must not be treated as a generic extension popup")
+	}
+}

@@ -37,12 +37,26 @@ const (
 	cloakWebStoreHelperVersionFn = ".embedded_version"
 )
 
-// cloakWebStoreHelperPath 返回 helper 扩展在用户机上的目标路径。
+// cloakWebStoreHelperPath 返回 helper 扩展在用户机上的共享目标路径。
 func cloakWebStoreHelperPath(appRoot string) string {
 	if strings.TrimSpace(appRoot) == "" {
 		return ""
 	}
 	return filepath.Join(appRoot, "extensions", cloakWebStoreHelperDirName)
+}
+
+// profileCloakWebStoreHelperPath 返回当前实例专属的 helper 扩展路径。
+//
+// Chrome Web Store helper 会把下载请求发回本地 LaunchServer。旧实现所有实例共用
+// <appRoot>/extensions/chromium-web-store/boost_endpoint.json，里面没有 profileId，
+// 多实例同时运行时只能落到“最后启动/active”的实例，导致旧实例点商店安装后看起来
+// 没反应。专属副本的扩展存储仍按 user-data-dir 隔离，同时 endpoint 写入当前
+// profileId，安装请求就能绑定回发起点击的实例。
+func profileCloakWebStoreHelperPath(userDataDir string) string {
+	if strings.TrimSpace(userDataDir) == "" {
+		return ""
+	}
+	return filepath.Join(userDataDir, "boost-helper", cloakWebStoreHelperDirName)
 }
 
 // embeddedHelperFingerprint 计算 embed 资源里 chromium-web-store 整棵树的 sha256
@@ -170,6 +184,79 @@ func ensureEmbeddedCloakExtensions(appRoot string) (string, error) {
 	return dest, nil
 }
 
+func ensureProfileCloakWebStoreHelper(appRoot, userDataDir, profileID string, port int, apiHeader, apiKey string) (string, error) {
+	src := cloakWebStoreHelperPath(appRoot)
+	if src == "" {
+		return "", fmt.Errorf("appRoot 为空，无法定位 helper 源目录")
+	}
+	if _, err := os.Stat(filepath.Join(src, "manifest.json")); err != nil {
+		if _, ensureErr := ensureEmbeddedCloakExtensions(appRoot); ensureErr != nil {
+			return "", ensureErr
+		}
+	}
+
+	dest := profileCloakWebStoreHelperPath(userDataDir)
+	if dest == "" {
+		return "", fmt.Errorf("userDataDir 为空，无法定位 profile helper 目录")
+	}
+	wantFp, err := embeddedHelperFingerprint()
+	if err != nil {
+		return "", err
+	}
+	versionFile := filepath.Join(dest, cloakWebStoreHelperVersionFn)
+	needsCopy := true
+	if existing, err := os.ReadFile(versionFile); err == nil && strings.TrimSpace(string(existing)) == wantFp {
+		if _, statErr := os.Stat(filepath.Join(dest, "manifest.json")); statErr == nil {
+			needsCopy = false
+		}
+	}
+	if needsCopy {
+		if err := os.RemoveAll(dest); err != nil {
+			return "", fmt.Errorf("清理 profile helper 目录失败: %w", err)
+		}
+		if err := copyDirTree(src, dest); err != nil {
+			return "", fmt.Errorf("复制 profile helper 目录失败: %w", err)
+		}
+		if err := os.WriteFile(versionFile, []byte(wantFp), 0644); err != nil {
+			return "", fmt.Errorf("写入 profile helper 版本失败: %w", err)
+		}
+	}
+	if err := writeHelperBoostEndpointFile(dest, port, apiHeader, apiKey, profileID); err != nil {
+		return "", err
+	}
+	return dest, nil
+}
+
+func copyDirTree(src, dest string) error {
+	return filepath.WalkDir(src, func(path string, d fs.DirEntry, walkErr error) error {
+		if walkErr != nil {
+			return walkErr
+		}
+		rel, err := filepath.Rel(src, path)
+		if err != nil {
+			return err
+		}
+		target := filepath.Join(dest, rel)
+		if d.IsDir() {
+			return os.MkdirAll(target, 0755)
+		}
+		in, err := os.Open(path)
+		if err != nil {
+			return err
+		}
+		defer in.Close()
+		out, err := os.Create(target)
+		if err != nil {
+			return err
+		}
+		if _, err := io.Copy(out, in); err != nil {
+			_ = out.Close()
+			return err
+		}
+		return out.Close()
+	})
+}
+
 // looksLikeStaleCloakExtensionPath 判断一条 --load-extension= 路径是否是
 // 老版本残留的开发机绝对路径或者用户机上根本不存在的路径。
 //
@@ -207,6 +294,13 @@ func writeHelperBoostEndpoint(appRoot string, port int, apiHeader, apiKey string
 	if dest == "" {
 		return fmt.Errorf("appRoot 为空")
 	}
+	return writeHelperBoostEndpointFile(dest, port, apiHeader, apiKey, "")
+}
+
+func writeHelperBoostEndpointFile(dest string, port int, apiHeader, apiKey, profileID string) error {
+	if strings.TrimSpace(dest) == "" {
+		return fmt.Errorf("helper 扩展目录为空")
+	}
 	if port <= 0 {
 		return fmt.Errorf("LaunchServer 端口无效: %d", port)
 	}
@@ -217,6 +311,9 @@ func writeHelperBoostEndpoint(appRoot string, port int, apiHeader, apiKey string
 		"port":      port,
 		"apiHeader": apiHeader,
 		"apiKey":    apiKey,
+	}
+	if strings.TrimSpace(profileID) != "" {
+		payload["profileId"] = strings.TrimSpace(profileID)
 	}
 	data, err := json.MarshalIndent(payload, "", "  ")
 	if err != nil {

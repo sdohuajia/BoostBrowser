@@ -101,6 +101,40 @@ func TestPatchChromePreferencesFileKeepsExistingSearchProvider(t *testing.T) {
 	}
 }
 
+func TestIsChromeWebStoreTarget(t *testing.T) {
+	cases := []struct {
+		name string
+		t    cdpTarget
+		want bool
+	}{
+		{
+			name: "chromewebstore detail page",
+			t:    cdpTarget{Type: "page", URL: "https://chromewebstore.google.com/detail/lighthouse/blipmdconlkpinefehnmjammfjpmpbjk", WebSocketDebuggerUrl: "ws://127.0.0.1/devtools/page/1"},
+			want: true,
+		},
+		{
+			name: "legacy chrome webstore page",
+			t:    cdpTarget{Type: "page", URL: "https://chrome.google.com/webstore/detail/lighthouse/blipmdconlkpinefehnmjammfjpmpbjk", WebSocketDebuggerUrl: "ws://127.0.0.1/devtools/page/2"},
+			want: true,
+		},
+		{
+			name: "ordinary page untouched",
+			t:    cdpTarget{Type: "page", URL: "https://example.com/", WebSocketDebuggerUrl: "ws://127.0.0.1/devtools/page/3"},
+			want: false,
+		},
+		{
+			name: "missing websocket untouched",
+			t:    cdpTarget{Type: "page", URL: "https://chromewebstore.google.com/detail/lighthouse/blipmdconlkpinefehnmjammfjpmpbjk"},
+			want: false,
+		},
+	}
+	for _, tc := range cases {
+		if got := isChromeWebStoreTarget(tc.t); got != tc.want {
+			t.Fatalf("%s: isChromeWebStoreTarget()=%v, want %v", tc.name, got, tc.want)
+		}
+	}
+}
+
 func TestIsExtensionStartupURL(t *testing.T) {
 	cases := []struct {
 		url  string

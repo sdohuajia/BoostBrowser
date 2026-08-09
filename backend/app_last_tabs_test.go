@@ -2,6 +2,36 @@ package backend
 
 import "testing"
 
+func TestLastTabsTrackerEnabledDefaultsOn(t *testing.T) {
+	t.Setenv("BOOST_BROWSER_ENABLE_LAST_TABS_TRACKER", "")
+	if !lastTabsTrackerEnabled() {
+		t.Fatal("last tabs tracker should be enabled by default")
+	}
+}
+
+func TestLastTabsTrackerCanBeDisabledByEnv(t *testing.T) {
+	for _, value := range []string{"0", "false", "no", "off"} {
+		t.Run(value, func(t *testing.T) {
+			t.Setenv("BOOST_BROWSER_ENABLE_LAST_TABS_TRACKER", value)
+			if lastTabsTrackerEnabled() {
+				t.Fatalf("last tabs tracker should be disabled for %q", value)
+			}
+		})
+	}
+}
+
+func TestWindowBoundsTrackerEnabledDefaultsOnAndCanBeDisabled(t *testing.T) {
+	t.Setenv("BOOST_BROWSER_ENABLE_WINDOW_BOUNDS_TRACKER", "")
+	if !windowBoundsTrackerEnabled() {
+		t.Fatal("window bounds tracker should be enabled by default")
+	}
+
+	t.Setenv("BOOST_BROWSER_ENABLE_WINDOW_BOUNDS_TRACKER", "0")
+	if windowBoundsTrackerEnabled() {
+		t.Fatal("window bounds tracker should be disabled when env is 0")
+	}
+}
+
 func TestRestorableTabURLsFromTargetsFiltersInternalAndDedupes(t *testing.T) {
 	targets := []cdpTarget{
 		{Type: "page", URL: "about:blank"},

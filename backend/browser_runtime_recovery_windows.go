@@ -6,12 +6,14 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
+	"os"
 	"os/exec"
 	"path/filepath"
 	"regexp"
 	"sort"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 	"unicode/utf16"
 
@@ -37,6 +39,13 @@ var (
 	quotedUserDataArgRe     = regexp.MustCompile(`(?i)(?:^|\s)"--user-data-dir=([^"]+)"`)
 	quotedUserDataValueRe   = regexp.MustCompile(`(?i)(?:^|\s)--user-data-dir="([^"]+)"`)
 	unquotedUserDataValueRe = regexp.MustCompile(`(?i)(?:^|\s)--user-data-dir=([^"\s]+)`)
+
+	runtimeDiscoveryCache = struct {
+		mu        sync.Mutex
+		processes []browserRuntimeProcess
+		err       error
+		at        time.Time
+	}{}
 )
 
 func (a *App) startBrowserRuntimeReconciler() {
@@ -184,21 +193,48 @@ func pickRuntimeProcessForSync(candidates []browserRuntimeProcess) (browserRunti
 }
 
 func discoverBoostBrowserProcesses(appRoot string) ([]browserRuntimeProcess, error) {
-	root := strings.TrimSpace(appRoot)
-	if root == "" {
+	if strings.TrimSpace(appRoot) == "" {
 		return nil, nil
 	}
-	root = filepath.Clean(root)
-	script := fmt.Sprintf(`
-$root = %s
-$chromeRoot = [System.IO.Path]::GetFullPath((Join-Path $root 'chrome'))
+	userDataRootKey := normalizeRuntimePathKey(filepath.Join(appRoot, "data"))
+
+	// WindowSyncPage polls GetSyncProfiles every few seconds.  On machines with many
+	// Chromium children, a CIM scan can take long enough that overlapping polls pile
+	// up and make the small sync-panel process look like it is crashing.  Keep a
+	// short process-snapshot cache and return the last snapshot instead of spawning
+	// concurrent PowerShell scans.
+	const cacheTTL = 1500 * time.Millisecond
+	if !runtimeDiscoveryCache.mu.TryLock() {
+		if time.Since(runtimeDiscoveryCache.at) < 10*time.Second {
+			return cloneRuntimeProcesses(runtimeDiscoveryCache.processes), runtimeDiscoveryCache.err
+		}
+		runtimeDiscoveryCache.mu.Lock()
+	} else if time.Since(runtimeDiscoveryCache.at) < cacheTTL {
+		processes := cloneRuntimeProcesses(runtimeDiscoveryCache.processes)
+		err := runtimeDiscoveryCache.err
+		runtimeDiscoveryCache.mu.Unlock()
+		return processes, err
+	}
+	defer runtimeDiscoveryCache.mu.Unlock()
+
+	// Do not constrain by ExecutablePath under <appRoot>\\chrome here.  Some
+	// supported runtimes are launched from copied/extracted/cache paths while still
+	// using this app's --user-data-dir.  The caller matches by profile userDataDir,
+	// so the safe and correct discovery key is command line user-data-dir + CDP port.
+	script := `
 $items = Get-CimInstance Win32_Process -ErrorAction SilentlyContinue | Where-Object {
-  $_.ExecutablePath -and $_.CommandLine -and $_.ExecutablePath.StartsWith($chromeRoot, [System.StringComparison]::OrdinalIgnoreCase) -and $_.CommandLine.Contains('--user-data-dir=') -and $_.CommandLine.Contains('--remote-debugging-port=')
+  $_.CommandLine -and $_.CommandLine.Contains('--user-data-dir=') -and $_.CommandLine.Contains('--remote-debugging-port=')
 } | Select-Object ProcessId, ExecutablePath, CommandLine
 @($items) | ConvertTo-Json -Depth 3 -Compress
-`, psSingleQuoted(root))
+`
 
-	cmd := exec.Command("powershell.exe", "-NoProfile", "-ExecutionPolicy", "Bypass", "-EncodedCommand", encodePowerShellCommand(script))
+	powershellPath := `C:\Windows\System32\WindowsPowerShell\v1.0\powershell.exe`
+	if _, err := os.Stat(powershellPath); err != nil {
+		if fallback, lookErr := exec.LookPath("powershell.exe"); lookErr == nil {
+			powershellPath = fallback
+		}
+	}
+	cmd := exec.Command(powershellPath, "-NoProfile", "-ExecutionPolicy", "Bypass", "-EncodedCommand", encodePowerShellCommand(script))
 	hideWindow(cmd)
 	// Add a timeout to prevent PowerShell from hanging indefinitely.
 	done := make(chan struct{})
@@ -213,24 +249,40 @@ $items = Get-CimInstance Win32_Process -ErrorAction SilentlyContinue | Where-Obj
 		// Command completed.
 	case <-time.After(5 * time.Second):
 		_ = cmd.Process.Kill()
-		return nil, fmt.Errorf("powershell process discovery timed out after 5s")
+		err := fmt.Errorf("powershell process discovery timed out after 5s")
+		runtimeDiscoveryCache.processes = nil
+		runtimeDiscoveryCache.err = err
+		runtimeDiscoveryCache.at = time.Now()
+		return nil, err
 	}
 	if cmdErr != nil {
+		runtimeDiscoveryCache.processes = nil
+		runtimeDiscoveryCache.err = cmdErr
+		runtimeDiscoveryCache.at = time.Now()
 		return nil, cmdErr
 	}
 	text := strings.TrimSpace(string(out))
 	if text == "" || text == "null" {
+		runtimeDiscoveryCache.processes = nil
+		runtimeDiscoveryCache.err = nil
+		runtimeDiscoveryCache.at = time.Now()
 		return nil, nil
 	}
 
 	var snapshots []winProcessSnapshot
 	if strings.HasPrefix(text, "[") {
 		if err := json.Unmarshal([]byte(text), &snapshots); err != nil {
+			runtimeDiscoveryCache.processes = nil
+			runtimeDiscoveryCache.err = err
+			runtimeDiscoveryCache.at = time.Now()
 			return nil, err
 		}
 	} else {
 		var one winProcessSnapshot
 		if err := json.Unmarshal([]byte(text), &one); err != nil {
+			runtimeDiscoveryCache.processes = nil
+			runtimeDiscoveryCache.err = err
+			runtimeDiscoveryCache.at = time.Now()
 			return nil, err
 		}
 		snapshots = append(snapshots, one)
@@ -238,6 +290,9 @@ $items = Get-CimInstance Win32_Process -ErrorAction SilentlyContinue | Where-Obj
 
 	processes := make([]browserRuntimeProcess, 0, len(snapshots))
 	for _, item := range snapshots {
+		if !shouldKeepRecoveredRuntimeCommandLine(item.CommandLine, userDataRootKey) {
+			continue
+		}
 		userDataDir, debugPort := parseChromeRuntimeCommandLine(item.CommandLine)
 		if item.ProcessId <= 0 || userDataDir == "" || debugPort <= 0 {
 			continue
@@ -251,7 +306,39 @@ $items = Get-CimInstance Win32_Process -ErrorAction SilentlyContinue | Where-Obj
 		})
 	}
 	sort.Slice(processes, func(i, j int) bool { return processes[i].PID < processes[j].PID })
+	runtimeDiscoveryCache.processes = cloneRuntimeProcesses(processes)
+	runtimeDiscoveryCache.err = nil
+	runtimeDiscoveryCache.at = time.Now()
 	return processes, nil
+}
+
+func cloneRuntimeProcesses(processes []browserRuntimeProcess) []browserRuntimeProcess {
+	if len(processes) == 0 {
+		return nil
+	}
+	cloned := make([]browserRuntimeProcess, len(processes))
+	copy(cloned, processes)
+	return cloned
+}
+
+func shouldKeepRecoveredRuntimeCommandLine(commandLine string, userDataRootKey string) bool {
+	lowerCommandLine := strings.ToLower(commandLine)
+	// Renderer/GPU/utility children inherit --user-data-dir and sometimes the
+	// remote debugging port too. Treating them as profile runtimes makes every
+	// sync-panel refresh enumerate hundreds of candidates on tab-heavy sessions.
+	// Only the browser root process is useful for window lookup/recovery.
+	if strings.Contains(lowerCommandLine, " --type=") {
+		return false
+	}
+	userDataDir, debugPort := parseChromeRuntimeCommandLine(commandLine)
+	if userDataDir == "" || debugPort <= 0 {
+		return false
+	}
+	userDataKey := normalizeRuntimePathKey(userDataDir)
+	if userDataRootKey == "" {
+		return true
+	}
+	return userDataKey == userDataRootKey || strings.HasPrefix(userDataKey, userDataRootKey+string(filepath.Separator))
 }
 
 func parseChromeRuntimeCommandLine(commandLine string) (string, int) {

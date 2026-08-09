@@ -1,6 +1,7 @@
 ﻿# Build artifacts
 build/bin/
 build/release/
+build/release-v*/
 build/darwin/
 publish/output/
 publish/*.nsi
@@ -19,6 +20,10 @@ logs/
 *.log
 *.tmp
 *.bak
+scripts/__pycache__/
+
+# Per-profile browser import caches
+backend/*/.boost-browser-import-cookies.json
 
 # Binaries
 *.exe

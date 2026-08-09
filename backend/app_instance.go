@@ -314,6 +314,7 @@ func (a *App) browserInstanceStartInternal(profileId string, extraLaunchArgs []s
 	args := []string{
 		fmt.Sprintf("--user-data-dir=%s", userDataDir),
 		fmt.Sprintf("--remote-debugging-port=%d", assignedDebugPort),
+		"--remote-allow-origins=http://127.0.0.1",
 		"--disable-session-crashed-bubble",
 		"--no-first-run",
 		"--no-default-browser-check",
@@ -470,8 +471,15 @@ func (a *App) browserInstanceStartInternal(profileId string, extraLaunchArgs []s
 		//
 		// 修复：startup 已经把 helper 解压到 <appRoot>/extensions/chromium-web-store，
 		// 这里把所有 --load-extension= 里的旧 helper 路径替换成规范路径，再 dedupe。
-		canonicalHelper := cloakWebStoreHelperPath(a.appRoot)
-		if canonicalHelper != "" {
+		profileHelper, helperErr := ensureProfileCloakWebStoreHelper(a.appRoot, userDataDir, profileId, a.launchServer.Port(), a.launchServer.APIAuthHeader(), a.launchServer.APIAuthKey())
+		if helperErr != nil {
+			log.Warn("准备 profile 专属 chromium-web-store helper 失败（将回退共享 helper）",
+				logger.F("profile_id", profileId),
+				logger.F("error", helperErr.Error()),
+			)
+			profileHelper = cloakWebStoreHelperPath(a.appRoot)
+		}
+		if profileHelper != "" {
 			cleaned := args[:0]
 			helperReplaced := false
 			for _, arg := range args {
@@ -484,7 +492,7 @@ func (a *App) browserInstanceStartInternal(profileId string, extraLaunchArgs []s
 						if p == "" {
 							continue
 						}
-						if looksLikeStaleCloakExtensionPath(p, a.appRoot) {
+						if looksLikeStaleCloakExtensionPath(p, a.appRoot) || strings.EqualFold(filepath.Clean(p), filepath.Clean(cloakWebStoreHelperPath(a.appRoot))) || strings.EqualFold(filepath.Clean(p), filepath.Clean(profileCloakWebStoreHelperPath(userDataDir))) {
 							helperReplaced = true
 							continue
 						}
@@ -498,13 +506,13 @@ func (a *App) browserInstanceStartInternal(profileId string, extraLaunchArgs []s
 				cleaned = append(cleaned, arg)
 			}
 			args = cleaned
-			// 始终把规范 helper 路径加进去（normalizeLoadExtensionArgs 后续会 dedupe）
-			if _, err := os.Stat(canonicalHelper); err == nil {
-				args = append(args, "--load-extension="+canonicalHelper)
+			// 始终把当前 profile 专属 helper 路径加进去（normalizeLoadExtensionArgs 后续会 dedupe）。
+			if _, err := os.Stat(profileHelper); err == nil {
+				args = append(args, "--load-extension="+profileHelper)
 				if helperReplaced {
-					log.Info("已用内置规范路径替换旧的 chromium-web-store 扩展路径",
+					log.Info("已用 profile 专属 chromium-web-store helper 替换旧路径",
 						logger.F("profile_id", profileId),
-						logger.F("helper", canonicalHelper),
+						logger.F("helper", profileHelper),
 					)
 				}
 			}
@@ -512,6 +520,7 @@ func (a *App) browserInstanceStartInternal(profileId string, extraLaunchArgs []s
 	}
 
 	args = normalizeLoadExtensionArgs(args)
+	enableDeveloperModeForManagedUnpackedExtensions(userDataDir, args)
 	// 清理 profile 中旧的 unpacked 扩展记录，避免同一个钱包/Header Fix 因旧路径残留显示两份。
 	cleanupStaleManagedUnpackedExtensions(userDataDir, args, a.appRoot)
 	pinAllLoadedExtensionsToToolbar(userDataDir, args)
@@ -597,7 +606,22 @@ func (a *App) browserInstanceStartInternal(profileId string, extraLaunchArgs []s
 			//     身份直接通过，无需再走 CDP Input 路径制造可被识别的 trusted=false
 			//     mouse event 序列
 			if isCloakSelectedCore {
-				log.Info("CloakBrowser 内核启用，已跳过 wrapper 级 stealth/UA/Turnstile 注入",
+				// 不注入 wrapper stealth，避免破坏 Cloak 自带指纹；但必须保留
+				// Chrome UA/UA-CH。否则 Chrome Web Store 会把页面识别成 Chromium，
+				// 显示“切换到 Chrome”并禁用“添加至 Chrome”。
+				if uaErr := applyUserAgentOverrideToAllPages(stableDebugPort); uaErr != nil {
+					log.Warn("CloakBrowser Chrome UA/UA-CH 覆写失败（非致命）",
+						logger.F("profile_id", profileId),
+						logger.F("debug_port", stableDebugPort),
+						logger.F("error", uaErr.Error()),
+					)
+				} else {
+					log.Info("CloakBrowser 已应用 Chrome UA/UA-CH 覆写（保留原生指纹隐身）",
+						logger.F("profile_id", profileId),
+						logger.F("debug_port", stableDebugPort),
+					)
+				}
+				log.Info("CloakBrowser 内核启用，已跳过 wrapper 级 stealth/Turnstile 注入",
 					logger.F("profile_id", profileId),
 					logger.F("debug_port", stableDebugPort),
 				)
@@ -794,6 +818,14 @@ func (a *App) BrowserInstanceStop(profileId string) (*BrowserProfile, error) {
 
 	cmd := a.browserMgr.BrowserProcesses[profileId]
 	debugPort := profile.DebugPort
+	// Browser.close 成功后调试端口会立即断开；如果等 markProfileStoppedLocked
+	// 再抓标签页，通常已经太晚，只能保留旧的 LastTabs。这里趁 CDP 还活着先保存
+	// 当前普通 http(s) 标签页，后续 markProfileStoppedLocked 仍会做一次兜底。
+	if debugPort > 0 {
+		if tabs := captureRestorableTabsViaCDP(debugPort); len(tabs) > 0 {
+			a.updateProfileLastTabsLocked(profile, tabs)
+		}
+	}
 	if tryCloseBrowserViaCDP(debugPort, 5*time.Second) {
 		a.markProfileStoppedLocked(profileId, profile)
 		log.Info("实例停止", logger.F("profile_id", profileId), logger.F("method", "cdp"), logger.F("debug_port", debugPort))
@@ -1245,6 +1277,7 @@ func (a *App) openBrowserWindowForRunningProfile(profile *BrowserProfile, extraL
 	args = append(args, sanitizedExtraLaunchArgs...)
 	args = appendChromeTestingInfobarSuppressArg(args, isCloakCoreForOpen)
 	args = normalizeLoadExtensionArgs(args)
+	enableDeveloperModeForManagedUnpackedExtensions(userDataDir, args)
 	if len(startURLs) > 0 {
 		args = append(args, startURLs...)
 	} else {
@@ -1366,6 +1399,70 @@ func isProcessAliveWindows(pid int) (bool, error) {
 	return strings.Contains(line, token), nil
 }
 
+// isChromeWebStoreURL 判断是否是需要 Chrome UA/UA-CH 的应用商店页面。
+// 只匹配 Chrome Web Store，不影响普通业务页面的 Cloak 原生导航路径。
+func isChromeWebStoreURL(rawURL string) bool {
+	low := strings.ToLower(strings.TrimSpace(rawURL))
+	return strings.Contains(low, "chrome.google.com/webstore") ||
+		strings.Contains(low, "chromewebstore.google.com/")
+}
+
+// navigateCloakWebStoreURL 为 Chrome Web Store 创建空白标签页，在首次请求前
+// 只应用 Chrome UA/UA-CH 覆写，然后导航到真实商店 URL。这样不注入 wrapper
+// stealth，也不会改变普通业务标签页的 Cloak 行为。
+func navigateCloakWebStoreURL(browserConn *websocket.Conn, debugPort int, targetURL, profileID string, msgID int) bool {
+	log := logger.New("Browser")
+	targetID, err := createBlankTab(browserConn, msgID)
+	if err != nil {
+		log.Warn("CDP 导航(cloak webstore)：创建空白标签页失败",
+			logger.F("profile_id", profileID), logger.F("url", targetURL), logger.F("error", err.Error()))
+		return false
+	}
+
+	fixedUA, metadata, err := getUserAgentOverride(debugPort)
+	if err != nil {
+		log.Warn("CDP 导航(cloak webstore)：获取 Chrome UA 失败",
+			logger.F("profile_id", profileID), logger.F("url", targetURL), logger.F("error", err.Error()))
+		return false
+	}
+	wsURL := fmt.Sprintf("ws://127.0.0.1:%d/devtools/page/%s", debugPort, targetID)
+	pageConn, _, err := websocket.DefaultDialer.Dial(wsURL, nil)
+	if err != nil {
+		log.Warn("CDP 导航(cloak webstore)：连接空白标签页失败",
+			logger.F("profile_id", profileID), logger.F("url", targetURL), logger.F("error", err.Error()))
+		return false
+	}
+	defer pageConn.Close()
+
+	if err := setUserAgentOverrideOnTarget(wsURL, fixedUA, metadata); err != nil {
+		log.Warn("CDP 导航(cloak webstore)：页面级 Chrome UA 覆写失败",
+			logger.F("profile_id", profileID), logger.F("url", targetURL), logger.F("error", err.Error()))
+		return false
+	}
+
+	navMsg := cdpMessage{Id: msgID + 1000, Method: "Page.navigate", Params: map[string]any{"url": targetURL}}
+	if err := pageConn.WriteJSON(navMsg); err != nil {
+		log.Warn("CDP 导航(cloak webstore)：导航写入失败",
+			logger.F("profile_id", profileID), logger.F("url", targetURL), logger.F("error", err.Error()))
+		return false
+	}
+	pageConn.SetReadDeadline(time.Now().Add(5 * time.Second))
+	var navResp cdpResponse
+	if err := pageConn.ReadJSON(&navResp); err != nil {
+		log.Warn("CDP 导航(cloak webstore)：读取导航响应失败",
+			logger.F("profile_id", profileID), logger.F("url", targetURL), logger.F("error", err.Error()))
+		return false
+	}
+	if navResp.Error != nil {
+		log.Warn("CDP 导航(cloak webstore)：Page.navigate 返回错误",
+			logger.F("profile_id", profileID), logger.F("url", targetURL), logger.F("error", navResp.Error.Message))
+		return false
+	}
+	log.Info("CDP 导航(cloak webstore)：已应用 Chrome UA/UA-CH 后导航",
+		logger.F("profile_id", profileID), logger.F("url", targetURL), logger.F("targetId", targetID))
+	return true
+}
+
 // navigateToTargetURLs 通过 CDP 将浏览器导航到目标 URL。
 //
 // 非 Cloak 内核（ungoogled-chromium 等）：
@@ -1409,9 +1506,14 @@ func navigateToTargetURLs(debugPort int, urls []string, profileId string, cloakO
 	}
 	browserConn.SetReadDeadline(time.Now().Add(15 * time.Second))
 
-	// Cloak 内核：直接 Target.createTarget(url)，不再注入任何 CDP 脚本
+	// Cloak 内核：普通业务 URL 仍直接 Target.createTarget(url)，不注入 wrapper
+	// stealth。Chrome Web Store 是例外：它会在首次请求前检查 UA/UA-CH，必须先
+	// 创建 about:blank、只应用 Chrome UA 覆写，再导航到商店页面。
 	if cloakOnly {
 		for i, url := range urls {
+			if isChromeWebStoreURL(url) && navigateCloakWebStoreURL(browserConn, debugPort, url, profileId, i+200) {
+				continue
+			}
 			createMsg := cdpMessage{
 				Id:     i + 200,
 				Method: "Target.createTarget",
@@ -1428,7 +1530,7 @@ func navigateToTargetURLs(debugPort int, urls []string, profileId string, cloakO
 			browserConn.SetReadDeadline(time.Now().Add(5 * time.Second))
 			var resp cdpResponse
 			_ = browserConn.ReadJSON(&resp)
-			log.Info("CDP 导航(cloak)：目标页面已打开（无 stealth/UA 注入）",
+			log.Info("CDP 导航(cloak)：目标页面已打开（普通 URL 保留原生路径）",
 				logger.F("profile_id", profileId),
 				logger.F("url", url),
 			)

@@ -73,7 +73,8 @@ func StartGlobalSerializedWindowWatchers(appRoot string) {
 // host is restarted. In that case the old PID-scoped watcher exits and later
 // wallet/login popups can appear fullscreen again. This global watcher only
 // touches Chrome_WidgetWin popup-looking windows whose owning process lives
-// under the packaged Boost Browser runtime directory.
+// under the packaged Boost Browser runtime directory. It only touches windows
+// Chromium already exposes as visible and never calls ShowWindow/foreground APIs.
 func StartGlobalExtensionPopupSizer(appRoot string) {
 	root := normalizeWindowsPath(appRoot)
 	if root == "" {
@@ -403,9 +404,6 @@ func clampExtensionPopupWindowsForAppRoot(appRoot string) {
 				if !shouldMove {
 					return 1
 				}
-				if isOffscreenWindowRect(rect) {
-					procShowWindow.Call(uintptr(hwnd), swRestore)
-				}
 				procSetWindowPos.Call(
 					uintptr(hwnd),
 					0,
@@ -421,7 +419,6 @@ func clampExtensionPopupWindowsForAppRoot(appRoot string) {
 			if !shouldMove {
 				return 1
 			}
-			procShowWindow.Call(uintptr(hwnd), swRestore)
 			procSetWindowPos.Call(
 				uintptr(hwnd),
 				0,
@@ -571,7 +568,7 @@ func shouldRestoreGenericExtensionPopupWindow(title, className string, rect winR
 		}
 		return w <= 900 && h <= 900
 	}
-	return isOffscreenWindowRect(rect)
+	return hasGenericExtensionPopupCue(t) && isOffscreenWindowRect(rect)
 }
 
 func shouldHandleHiddenExtensionPopupWindow(title, className string, rect winRect) bool {
@@ -613,10 +610,47 @@ func needsGenericExtensionPopupResize(title, className string, width, height int
 	if looksLikeWalletExtensionPopup(t) || isStrongExtensionPopupTitle(t) {
 		return false
 	}
+	if !hasGenericExtensionPopupCue(t) {
+		return false
+	}
 	if width >= 320 && width <= 460 && height >= 450 && height <= 720 {
 		return false
 	}
 	return width >= 700 || height >= 760
+}
+
+func hasGenericExtensionPopupCue(title string) bool {
+	t := strings.TrimSpace(strings.ToLower(title))
+	if t == "" {
+		return false
+	}
+	cuePhrases := []string{
+		"account manager",
+		"extension",
+		"notification",
+		"prompt",
+		"login request",
+		"sign in request",
+		"connect request",
+		"signature request",
+		"transaction request",
+		"confirm transaction",
+		"permission",
+		"allow",
+		"approve",
+		"登录请求",
+		"登录授权",
+		"连接请求",
+		"签名请求",
+		"确认交易",
+		"查看权限",
+	}
+	for _, cue := range cuePhrases {
+		if strings.Contains(t, cue) {
+			return true
+		}
+	}
+	return false
 }
 
 func isStrongExtensionPopupTitle(title string) bool {

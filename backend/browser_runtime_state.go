@@ -96,11 +96,13 @@ func (a *App) markProfileRunningLocked(profileId string, profile *BrowserProfile
 	if debugReady && a.launchServer != nil {
 		a.launchServer.SetActiveProfile(profile)
 	}
-	// crashprobe: 窗口 bounds 持续轮询先继续停用；last tabs 恢复按最小能力重新打开，
-	// 仅周期抓取普通 http(s) 标签页，避免 Chrome 原生 session restore 被禁用后
-	// 直接关窗场景丢失可恢复标签页。
+	// Chrome 原生 session restore 会在启动前被清理，避免扩展欢迎页/钱包页反复复活。
+	// 因此这里必须由 Boost Browser 自己持续保存普通网页标签页和窗口 bounds，
+	// 否则用户关闭实例后下次只能恢复数据库里的旧记录。
 	if debugReady && debugPort > 0 {
-		// a.startWindowBoundsTracker(profileId, debugPort)
+		if windowBoundsTrackerEnabled() {
+			a.startWindowBoundsTracker(profileId, debugPort)
+		}
 		a.startLastTabsTracker(profileId, debugPort)
 	}
 }
@@ -137,9 +139,11 @@ func (a *App) setProfileDebugReady(profileId string, debugPort int) (*BrowserPro
 	if snapshot != nil && snapshot.DebugReady && a.launchServer != nil {
 		a.launchServer.SetActiveProfile(snapshot)
 	}
-	// crashprobe: 窗口 bounds 持续轮询先继续停用；last tabs 恢复按最小能力重新打开。
+	// 调试接口延迟就绪时同样补上保存 tracker。
 	if changed && snapshot != nil && snapshot.DebugReady {
-		// a.startWindowBoundsTracker(profileId, debugPort)
+		if windowBoundsTrackerEnabled() {
+			a.startWindowBoundsTracker(profileId, debugPort)
+		}
 		a.startLastTabsTracker(profileId, debugPort)
 	}
 	return snapshot, changed
