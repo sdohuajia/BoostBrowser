@@ -106,10 +106,17 @@ func (a *App) OKXWalletBatchImport(mnemonicsText, password string, profileIDs []
 			// OKX's SES UI is sometimes exposed to Windows UI Automation but hidden
 			// from CDP's DOM and execution contexts. Continue the same flow through
 			// the native accessibility tree before reporting failure.
-			if uiaErr := importOKXWalletViaUIA(mnemonics[i], password); uiaErr != nil {
+			if uiaErr := importOKXWalletViaUIA(active.Pid, mnemonics[i], password); uiaErr != nil {
 				err = fmt.Errorf("CDP: %v; UI Automation: %v", err, uiaErr)
 				item.Status = "failed"
 				item.Error = err.Error()
+				result.Failed++
+				result.Items = append(result.Items, item)
+				continue
+			}
+			if verifyErr := verifyOKXWalletHomeViaCDP(active.DebugPort, password); verifyErr != nil {
+				item.Status = "failed"
+				item.Error = fmt.Sprintf("OKX import completed in UI Automation but wallet home verification failed: %v", verifyErr)
 				result.Failed++
 				result.Items = append(result.Items, item)
 				continue
@@ -237,13 +244,13 @@ func importOKXWalletViaCDP(port int, mnemonic, password string) error {
 	if err := okxClick(pageConn, 11, `Confirm|Bestätigen|确认|完成|Done|Create`); err != nil {
 		return fmt.Errorf("OKX password confirmation failed: %w", err)
 	}
-	if err := okxVerifyWalletHome(browserConn, port, headers); err != nil {
+	if err := okxVerifyWalletHome(browserConn, port, headers, password); err != nil {
 		return err
 	}
 	return nil
 }
 
-func okxVerifyWalletHome(browserConn *websocket.Conn, port int, headers http.Header) error {
+func okxVerifyWalletHome(browserConn *websocket.Conn, port int, headers http.Header, password string) error {
 	var lastErr error
 	for attempt := 0; attempt < 6; attempt++ {
 		response, err := okxCDPCall(browserConn, 100+attempt, "Target.createTarget", map[string]any{
@@ -268,7 +275,12 @@ func okxVerifyWalletHome(browserConn *websocket.Conn, port int, headers http.Hea
 			lastErr = dialErr
 			continue
 		}
-		waitErr := okxWaitFor(popupConn, 200+attempt, `location.hash === '#/' && document.body && document.querySelectorAll('input').length === 0 && document.body.innerText.trim().length > 200 && /XRP|USDT|ETH|SOL|BTC/.test(document.body.innerText)`, 5*time.Second)
+		waitErr := okxWaitFor(popupConn, 200+attempt, `((location.hash === '#/' && document.body && document.querySelectorAll('input').length === 0 && document.body.innerText.trim().length > 200 && /XRP|USDT|ETH|SOL|BTC/.test(document.body.innerText)) || (location.hash.includes('unlock') && document.querySelectorAll('input').length >= 1))`, 5*time.Second)
+		if waitErr == nil {
+			if unlockErr := okxUnlockTarget(popupConn, 400+attempt, password); unlockErr == nil {
+				waitErr = okxWaitFor(popupConn, 500+attempt, `location.hash === '#/' && document.body && document.querySelectorAll('input').length === 0 && document.body.innerText.trim().length > 200 && /XRP|USDT|ETH|SOL|BTC/.test(document.body.innerText)`, 8*time.Second)
+			}
+		}
 		popupConn.Close()
 		if waitErr == nil {
 			return nil
@@ -278,6 +290,12 @@ func okxVerifyWalletHome(browserConn *websocket.Conn, port int, headers http.Hea
 		time.Sleep(500 * time.Millisecond)
 	}
 	return fmt.Errorf("OKX wallet home did not become ready: %w", lastErr)
+}
+
+func okxUnlockTarget(conn *websocket.Conn, id int, password string) error {
+	passwordJSON, _ := json.Marshal(password)
+	expression := fmt.Sprintf(`(()=>{if(!location.hash.includes('unlock'))return true;const p=%s,inputs=[...document.querySelectorAll('input')].filter(e=>e.offsetParent);if(inputs.length<1)throw Error('unlock password input not found');const e=inputs[0],d=Object.getOwnPropertyDescriptor(HTMLInputElement.prototype,'value');d.set.call(e,p);e.dispatchEvent(new InputEvent('input',{bubbles:true,inputType:'insertText',data:p}));e.dispatchEvent(new Event('change',{bubbles:true}));const b=[...document.querySelectorAll('button')].find(x=>!x.disabled&&/Unlock|解锁|解鎖|解锁钱包/i.test(x.innerText||x.textContent||''));if(!b)throw Error('unlock button not found');b.click();return true})()`, passwordJSON)
+	return okxEvaluate(conn, id, expression)
 }
 
 func okxFindSESTarget(conn *websocket.Conn, parentTargetID string, timeout time.Duration) (string, error) {
@@ -310,12 +328,13 @@ func okxFindSESTarget(conn *websocket.Conn, parentTargetID string, timeout time.
 // to Windows UI Automation but its controls are not reachable through CDP.
 // Input is sent over stdin so mnemonic/password values never appear in a
 // process command line or in browser logs.
-func importOKXWalletViaUIA(mnemonic, password string) error {
-	payload, err := json.Marshal(map[string]string{"mnemonic": mnemonic, "password": password})
+func importOKXWalletViaUIA(browserPID int, mnemonic, password string) error {
+	payload, err := json.Marshal(map[string]any{"browserPID": browserPID, "mnemonic": mnemonic, "password": password})
 	if err != nil {
 		return err
 	}
 	cmd := exec.Command("powershell.exe", "-NoProfile", "-NonInteractive", "-STA", "-WindowStyle", "Hidden", "-ExecutionPolicy", "Bypass", "-Command", okxUIAPowerShellScript)
+	hideWindow(cmd)
 	cmd.Stdin = bytes.NewReader(payload)
 	var stdout, stderr bytes.Buffer
 	cmd.Stdout = &stdout
@@ -341,6 +360,7 @@ Add-Type -AssemblyName UIAutomationTypes
 Add-Type -AssemblyName System.Windows.Forms
 
 $request = [Console]::In.ReadToEnd() | ConvertFrom-Json
+$browserPID = [int]$request.browserPID
 $words = @([string]$request.mnemonic -split '\s+' | Where-Object { $_ })
 $password = [string]$request.password
 if ($words.Count -ne 12) { throw 'expected exactly 12 mnemonic words' }
@@ -381,6 +401,7 @@ function Find-OKXWindow {
     $fallback = $null
     for ($i = 0; $i -lt $windows.Count; $i++) {
         $window = $windows.Item($i)
+        if ($browserPID -gt 0 -and $window.Current.ProcessId -ne $browserPID) { continue }
         $title = Get-Text $window
         if ($title -notmatch '(?i)OKX|Wallet') { continue }
         $edits = @(Get-VisibleDescendants $window $editCondition | Where-Object {
@@ -503,6 +524,12 @@ $confirmPassword = Wait-Until { Find-Action $window '(?i)确认|Confirm|完成|D
 Invoke-Element $confirmPassword
 
 $stage = 'wallet onboarding or home'
+$welcome = Wait-Until {
+    $text = Get-WindowText $window
+    if ($text -match '(?i)Web3') { $window } else { $null }
+}
+$welcomeAction = Find-Action $welcome '(?i)Web3|Start'
+if ($null -ne $welcomeAction) { Invoke-Element $welcomeAction }
 $home = Wait-Until {
     $text = Get-WindowText $window
     if ($text -match '(?i)开启你的 Web3 之旅|Start your Web3 journey|Send|Receive|发送|接收') { $window } else { $null }
@@ -516,6 +543,20 @@ Wait-Until {
 } | Out-Null
 'OKX_UIA_SUCCESS'
 `
+
+func verifyOKXWalletHomeViaCDP(port int, password string) error {
+	wsURL, err := getBrowserWebSocketURL(port)
+	if err != nil {
+		return err
+	}
+	headers := http.Header{"Origin": []string{"http://127.0.0.1"}}
+	browserConn, _, err := websocket.DefaultDialer.Dial(wsURL, headers)
+	if err != nil {
+		return err
+	}
+	defer browserConn.Close()
+	return okxVerifyWalletHome(browserConn, port, headers, password)
+}
 
 func okxEvaluate(conn *websocket.Conn, id int, expression string) error {
 	contexts, err := okxExecutionContexts(conn, id+1000)
