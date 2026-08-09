@@ -85,27 +85,29 @@ func cdpCall(debugPort int, method string, params map[string]any) (map[string]an
 		return nil, fmt.Errorf("未找到可用的 WebSocket 调试地址")
 	}
 
-	// 2. 建立 WebSocket 连接
+	return cdpCallWebSocket(wsURL, method, params)
+}
+
+// cdpCallWebSocket invokes a command against one explicit CDP page target.
+func cdpCallWebSocket(wsURL, method string, params map[string]any) (map[string]any, error) {
 	conn, _, err := websocket.DefaultDialer.Dial(wsURL, nil)
 	if err != nil {
-		return nil, fmt.Errorf("WebSocket 连接失败: %w", err)
+		return nil, fmt.Errorf("WebSocket connect failed: %w", err)
 	}
 	defer conn.Close()
 	conn.SetReadDeadline(time.Now().Add(5 * time.Second))
 
-	// 3. 发送 CDP 命令
 	msg := cdpMessage{Id: 1, Method: method, Params: params}
 	if err := conn.WriteJSON(msg); err != nil {
-		return nil, fmt.Errorf("CDP 命令发送失败: %w", err)
+		return nil, fmt.Errorf("CDP command write failed: %w", err)
 	}
 
-	// 4. 等待响应
 	var cdpResp cdpResponse
 	if err := conn.ReadJSON(&cdpResp); err != nil {
-		return nil, fmt.Errorf("CDP 响应读取失败: %w", err)
+		return nil, fmt.Errorf("CDP response read failed: %w", err)
 	}
 	if cdpResp.Error != nil {
-		return nil, fmt.Errorf("CDP 错误: %s", cdpResp.Error.Message)
+		return nil, fmt.Errorf("CDP error: %s", cdpResp.Error.Message)
 	}
 	return cdpResp.Result, nil
 }

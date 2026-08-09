@@ -1,3 +1,11 @@
+# v2.0.3
+
+- Improve multi-instance window synchronization reliability for web navigation.
+- Select the visible CDP tab instead of relying on unstable target-list ordering.
+- Retry failed follower navigation and only mark a URL as synchronized after every follower accepts it.
+- Navigation recovery is enabled by default for HTTP/HTTPS pages; set `BOOST_BROWSER_ENABLE_SYNC_URL_SYNC=0` to disable it.
+- This is a normal update, not a forced update.
+
 # v2.0.2
 
 - Hide the PowerShell console used by the OKX UI Automation fallback.

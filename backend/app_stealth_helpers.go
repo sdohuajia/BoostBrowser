@@ -62,3 +62,33 @@ func getCDPPageTargets(debugPort int) ([]string, error) {
 	}
 	return wsURLs, nil
 }
+
+// getVisibleCDPPageTarget avoids unstable /json ordering by choosing the tab
+// that Chrome reports as visible for this browser instance.
+func getVisibleCDPPageTarget(debugPort int) (cdpTarget, error) {
+	pages, err := getCDPPageTargetInfos(debugPort)
+	if err != nil {
+		return cdpTarget{}, err
+	}
+	if len(pages) == 0 {
+		return cdpTarget{}, fmt.Errorf("no available page debugging target")
+	}
+
+	fallback := pages[0]
+	for _, page := range pages {
+		if page.URL != "" && page.URL != "about:blank" {
+			fallback = page
+		}
+		result, callErr := cdpCallWebSocket(page.WebSocketDebuggerUrl, "Runtime.evaluate", map[string]any{
+			"expression":    "document.visibilityState === 'visible'",
+			"returnByValue": true,
+		})
+		if callErr != nil {
+			continue
+		}
+		if visible, ok := result["value"].(bool); ok && visible {
+			return page, nil
+		}
+	}
+	return fallback, nil
+}

@@ -93,7 +93,13 @@ func (s *InputSyncer) lifecycle(event string, fields ...string) {
 }
 
 func syncURLSyncEnabled() bool {
-	return syncEnvFlagEnabled("BOOST_BROWSER_ENABLE_SYNC_URL_SYNC")
+	value := strings.TrimSpace(strings.ToLower(os.Getenv("BOOST_BROWSER_ENABLE_SYNC_URL_SYNC")))
+	switch value {
+	case "0", "false", "no", "off":
+		return false
+	default:
+		return true
+	}
 }
 
 func syncDebugLogEnabled() bool {
@@ -987,47 +993,58 @@ func (s *InputSyncer) urlSyncLoop() {
 
 		if masterDebug > 0 && len(followerDebug) > 0 {
 			url := s.getMasterURL(masterDebug)
-			if url != "" && url != s.lastSyncURL && !isAboutBlank(url) {
-				s.lastSyncURL = url
+			if isSyncableURL(url) && url != s.lastSyncURL {
+				allFollowersSynced := true
 				for _, port := range followerDebug {
-					if port > 0 {
-						s.navigateFollower(port, url)
+					if port > 0 && !s.navigateFollower(port, url) {
+						allFollowersSynced = false
 					}
+				}
+				if allFollowersSynced {
+					s.lastSyncURL = url
 				}
 			}
 		}
 
-		time.Sleep(900 * time.Millisecond)
+		time.Sleep(350 * time.Millisecond)
 	}
 }
 
 func (s *InputSyncer) getMasterURL(debugPort int) string {
-	result, err := cdpCall(debugPort, "Runtime.evaluate", map[string]any{
+	target, err := getVisibleCDPPageTarget(debugPort)
+	if err != nil {
+		return ""
+	}
+	result, err := cdpCallWebSocket(target.WebSocketDebuggerUrl, "Runtime.evaluate", map[string]any{
 		"expression":    "location.href",
 		"returnByValue": true,
 	})
 	if err != nil {
 		return ""
 	}
-	val, ok := result["value"]
-	if !ok {
-		return ""
-	}
-	str, ok := val.(string)
-	if !ok {
-		return ""
-	}
-	return str
+	url, _ := result["value"].(string)
+	return url
 }
 
-func (s *InputSyncer) navigateFollower(debugPort int, url string) {
-	_, _ = cdpCall(debugPort, "Page.navigate", map[string]any{
-		"url": url,
-	})
+func (s *InputSyncer) navigateFollower(debugPort int, url string) bool {
+	for attempt := 0; attempt < 3; attempt++ {
+		target, err := getVisibleCDPPageTarget(debugPort)
+		if err == nil {
+			result, callErr := cdpCallWebSocket(target.WebSocketDebuggerUrl, "Page.navigate", map[string]any{"url": url})
+			if callErr == nil {
+				if errorText, _ := result["errorText"].(string); strings.TrimSpace(errorText) == "" {
+					return true
+				}
+			}
+		}
+		time.Sleep(time.Duration(attempt+1) * 150 * time.Millisecond)
+	}
+	return false
 }
 
-func isAboutBlank(url string) bool {
-	return url == "about:blank" || url == "about:blank#" || url == ""
+func isSyncableURL(rawURL string) bool {
+	url := strings.ToLower(strings.TrimSpace(rawURL))
+	return strings.HasPrefix(url, "https://") || strings.HasPrefix(url, "http://")
 }
 
 func toFloat64(v interface{}) (float64, bool) {

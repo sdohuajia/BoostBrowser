@@ -9,15 +9,28 @@ import (
 	"golang.org/x/sys/windows"
 )
 
-func TestInputSyncerURLSyncDefaultOffUnlessEnvEnabled(t *testing.T) {
+func TestInputSyncerURLSyncDefaultsToEnabledAndCanBeDisabled(t *testing.T) {
 	t.Setenv("BOOST_BROWSER_ENABLE_SYNC_URL_SYNC", "")
-	if syncURLSyncEnabled() {
-		t.Fatalf("URL sync must be disabled by default for crash isolation")
+	if !syncURLSyncEnabled() {
+		t.Fatalf("URL sync should be enabled by default for self-healing navigation")
 	}
 
-	t.Setenv("BOOST_BROWSER_ENABLE_SYNC_URL_SYNC", "1")
-	if !syncURLSyncEnabled() {
-		t.Fatalf("URL sync should be enabled when BOOST_BROWSER_ENABLE_SYNC_URL_SYNC=1")
+	t.Setenv("BOOST_BROWSER_ENABLE_SYNC_URL_SYNC", "0")
+	if syncURLSyncEnabled() {
+		t.Fatalf("URL sync should be disabled when BOOST_BROWSER_ENABLE_SYNC_URL_SYNC=0")
+	}
+}
+
+func TestIsSyncableURLAllowsOnlyWebPages(t *testing.T) {
+	for _, rawURL := range []string{"https://example.com", "http://example.com/path"} {
+		if !isSyncableURL(rawURL) {
+			t.Fatalf("expected URL to be syncable: %q", rawURL)
+		}
+	}
+	for _, rawURL := range []string{"", "about:blank", "chrome://settings", "chrome-extension://wallet"} {
+		if isSyncableURL(rawURL) {
+			t.Fatalf("expected URL to be ignored: %q", rawURL)
+		}
 	}
 }
 
