@@ -34,6 +34,29 @@ func TestIsSyncableURLAllowsOnlyWebPages(t *testing.T) {
 	}
 }
 
+func TestCDPMouseEventForMessage(t *testing.T) {
+	cases := []struct {
+		message uint32
+		event   string
+		button  string
+		buttons int
+	}{
+		{WM_LBUTTONDOWN, "mousePressed", "left", 1},
+		{WM_LBUTTONUP, "mouseReleased", "left", 0},
+		{WM_RBUTTONDOWN, "mousePressed", "right", 2},
+		{WM_RBUTTONUP, "mouseReleased", "right", 0},
+	}
+	for _, tc := range cases {
+		event, button, buttons, ok := cdpMouseEventForMessage(tc.message)
+		if !ok || event != tc.event || button != tc.button || buttons != tc.buttons {
+			t.Fatalf("unexpected mapping for %#x: %q %q %d ok=%v", tc.message, event, button, buttons, ok)
+		}
+	}
+	if _, _, _, ok := cdpMouseEventForMessage(WM_MOUSEMOVE); ok {
+		t.Fatal("mouse move must not be treated as a click event")
+	}
+}
+
 func TestNewInputSyncerWithLoggerStoresLifecycleLogger(t *testing.T) {
 	called := false
 	s := NewInputSyncerWithLogger(func(event string, fields ...string) {

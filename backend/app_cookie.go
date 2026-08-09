@@ -90,12 +90,16 @@ func cdpCall(debugPort int, method string, params map[string]any) (map[string]an
 
 // cdpCallWebSocket invokes a command against one explicit CDP page target.
 func cdpCallWebSocket(wsURL, method string, params map[string]any) (map[string]any, error) {
+	return cdpCallWebSocketWithTimeout(wsURL, method, params, 5*time.Second)
+}
+
+func cdpCallWebSocketWithTimeout(wsURL, method string, params map[string]any, timeout time.Duration) (map[string]any, error) {
 	conn, _, err := websocket.DefaultDialer.Dial(wsURL, nil)
 	if err != nil {
 		return nil, fmt.Errorf("WebSocket connect failed: %w", err)
 	}
 	defer conn.Close()
-	conn.SetReadDeadline(time.Now().Add(5 * time.Second))
+	conn.SetReadDeadline(time.Now().Add(timeout))
 
 	msg := cdpMessage{Id: 1, Method: method, Params: params}
 	if err := conn.WriteJSON(msg); err != nil {

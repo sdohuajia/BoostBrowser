@@ -51,8 +51,9 @@ type InputSyncer struct {
 	lastSyncURL string
 
 	// 跟随窗口列表原子快照
-	followerSnapshot []windows.HWND
-	followerMu       sync.RWMutex
+	followerSnapshot       []windows.HWND
+	followerTargetSnapshot []syncFollowerTarget
+	followerMu             sync.RWMutex
 
 	// 诊断计数器
 	clickCount   int32
@@ -72,6 +73,11 @@ type InputSyncer struct {
 type SyncConfig struct {
 	MouseEnabled bool `json:"mouseEnabled"`
 	KeyEnabled   bool `json:"keyEnabled"`
+}
+
+type syncFollowerTarget struct {
+	hwnd      windows.HWND
+	debugPort int
 }
 
 // NewInputSyncer 创建输入同步器
@@ -143,6 +149,10 @@ func (s *InputSyncer) Start(masterHwnd windows.HWND, followerHwnds []windows.HWN
 	s.followerMu.Lock()
 	s.followerSnapshot = make([]windows.HWND, len(filtered))
 	copy(s.followerSnapshot, filtered)
+	s.followerTargetSnapshot = make([]syncFollowerTarget, len(filtered))
+	for i, hwnd := range filtered {
+		s.followerTargetSnapshot[i] = syncFollowerTarget{hwnd: hwnd}
+	}
 	s.followerMu.Unlock()
 
 	atomic.StoreInt32(&s.active, 1)
@@ -200,8 +210,9 @@ func (s *InputSyncer) StartWithURLSync(masterHwnd windows.HWND, followerHwnds []
 
 	s.mu.Lock()
 	s.masterDebug = masterDebugPort
-	s.followerDebug = followerDebugPorts
+	s.followerDebug = append([]int(nil), followerDebugPorts...)
 	s.mu.Unlock()
+	s.setFollowerDebugPorts(followerDebugPorts)
 
 	if !syncURLSyncEnabled() {
 		log := logger.New("InputSyncer")
@@ -351,6 +362,24 @@ func (s *InputSyncer) getFollowerSnapshot() []windows.HWND {
 	return snapshot
 }
 
+func (s *InputSyncer) setFollowerDebugPorts(debugPorts []int) {
+	s.followerMu.Lock()
+	defer s.followerMu.Unlock()
+	for i := range s.followerTargetSnapshot {
+		if i < len(debugPorts) {
+			s.followerTargetSnapshot[i].debugPort = debugPorts[i]
+		}
+	}
+}
+
+func (s *InputSyncer) getFollowerTargets() []syncFollowerTarget {
+	s.followerMu.RLock()
+	defer s.followerMu.RUnlock()
+	targets := make([]syncFollowerTarget, len(s.followerTargetSnapshot))
+	copy(targets, s.followerTargetSnapshot)
+	return targets
+}
+
 // ============================================================================
 // 坐标映射（Chrome-Manager 风格，不找 render child）
 //
@@ -416,6 +445,30 @@ func mapCoordsViaClientArea(screenX, screenY int, masterHwnd, followerHwnd windo
 }
 
 var procEnumChildWindows = user32dll.NewProc("EnumChildWindows")
+
+func mapCoordsToRenderViewport(screenX, screenY int, masterHwnd, followerHwnd windows.HWND) (float64, float64, bool) {
+	masterRender := findChromeRenderChild(masterHwnd)
+	followerRender := findChromeRenderChild(followerHwnd)
+	if masterRender == 0 || followerRender == 0 {
+		return 0, 0, false
+	}
+	mLeft, mTop, mRight, mBottom := getWindowRect(masterRender)
+	mW, mH := mRight-mLeft, mBottom-mTop
+	if mW <= 50 || mH <= 50 || screenX < int(mLeft) || screenX > int(mRight) || screenY < int(mTop) || screenY > int(mBottom) {
+		return 0, 0, false
+	}
+	fLeft, fTop, fRight, fBottom := getWindowRect(followerRender)
+	fW, fH := fRight-fLeft, fBottom-fTop
+	if fW <= 50 || fH <= 50 {
+		return 0, 0, false
+	}
+	relX := float64(screenX-int(mLeft)) / float64(mW)
+	relY := float64(screenY-int(mTop)) / float64(mH)
+	if relX < 0 || relX > 1 || relY < 0 || relY > 1 {
+		return 0, 0, false
+	}
+	return relX * float64(fW), relY * float64(fH), true
+}
 
 func mapCoordsViaRenderContent(screenX, screenY int, masterHwnd, followerHwnd windows.HWND) (uintptr, bool) {
 	masterRender := findChromeRenderChild(masterHwnd)
@@ -568,6 +621,55 @@ type MSLLHOOKSTRUCT struct {
 	DwExtraInfo uintptr
 }
 
+func cdpMouseEventForMessage(msg uint32) (eventType, button string, buttons int, ok bool) {
+	switch msg {
+	case WM_LBUTTONDOWN:
+		return "mousePressed", "left", 1, true
+	case WM_LBUTTONUP:
+		return "mouseReleased", "left", 0, true
+	case WM_RBUTTONDOWN:
+		return "mousePressed", "right", 2, true
+	case WM_RBUTTONUP:
+		return "mouseReleased", "right", 0, true
+	case WM_MBUTTONDOWN:
+		return "mousePressed", "middle", 4, true
+	case WM_MBUTTONUP:
+		return "mouseReleased", "middle", 0, true
+	default:
+		return "", "", 0, false
+	}
+}
+
+func (s *InputSyncer) dispatchFollowerMouse(target syncFollowerTarget, msg uint32, screenX, screenY int) bool {
+	if target.debugPort <= 0 {
+		return false
+	}
+	eventType, button, buttons, ok := cdpMouseEventForMessage(msg)
+	if !ok {
+		return false
+	}
+	x, y, ok := mapCoordsToRenderViewport(screenX, screenY, s.masterHwnd, target.hwnd)
+	if !ok {
+		return false
+	}
+	page, err := getVisibleCDPPageTargetWithTimeout(target.debugPort, 250*time.Millisecond)
+	if err != nil {
+		return false
+	}
+	if eventType == "mousePressed" {
+		_, err = cdpCallWebSocketWithTimeout(page.WebSocketDebuggerUrl, "Input.dispatchMouseEvent", map[string]any{
+			"type": "mouseMoved", "x": x, "y": y,
+		}, 250*time.Millisecond)
+		if err != nil {
+			return false
+		}
+	}
+	_, err = cdpCallWebSocketWithTimeout(page.WebSocketDebuggerUrl, "Input.dispatchMouseEvent", map[string]any{
+		"type": eventType, "x": x, "y": y, "button": button, "buttons": buttons, "clickCount": 1,
+	}, 250*time.Millisecond)
+	return err == nil
+}
+
 func (s *InputSyncer) mouseHookCallback(nCode int, wParam uintptr, lParam uintptr) uintptr {
 	defer func() {
 		if r := recover(); r != nil {
@@ -595,47 +697,33 @@ func (s *InputSyncer) mouseHookCallback(nCode int, wParam uintptr, lParam uintpt
 	switch msg {
 	case WM_LBUTTONDOWN, WM_LBUTTONUP, WM_RBUTTONDOWN, WM_RBUTTONUP, WM_MBUTTONDOWN, WM_MBUTTONUP:
 		atomic.AddInt32(&s.clickCount, 1)
-		for _, hwnd := range followers {
+		for _, target := range s.getFollowerTargets() {
+			hwnd := target.hwnd
 			if !isWindow(hwnd) {
 				continue
 			}
 
-			// 映射坐标到跟随窗口客户区坐标（Chrome-Manager 风格）
+			// CDP acknowledges accepted input, unlike the legacy asynchronous
+			// PostMessage path. Keep that path strictly as a compatibility fallback.
+			if s.dispatchFollowerMouse(target, msg, screenX, screenY) {
+				continue
+			}
+
 			lparam, ok := mapCoordsChromeManager(screenX, screenY, s.masterHwnd, hwnd)
 			if !ok {
 				continue
 			}
-
-			// 构造 wParam（按键状态）
 			var wparam uintptr
 			switch msg {
 			case WM_LBUTTONDOWN:
 				wparam = MK_LBUTTON
-			case WM_LBUTTONUP:
-				wparam = 0
 			case WM_RBUTTONDOWN:
 				wparam = MK_RBUTTON
-			case WM_RBUTTONUP:
-				wparam = 0
 			case WM_MBUTTONDOWN:
 				wparam = MK_MBUTTON
-			case WM_MBUTTONUP:
-				wparam = 0
 			}
-
-			// 发到顶层窗口：先 WM_MOUSEMOVE 让 Chrome 更新 hover 状态
 			procPostMessageW.Call(uintptr(hwnd), WM_MOUSEMOVE, wparam, lparam)
-			// 再发点击消息
 			procPostMessageW.Call(uintptr(hwnd), uintptr(msg), wparam, lparam)
-
-			// 仅在首次点击时记录详细日志（避免日志过多）
-			if atomic.LoadInt32(&s.clickCount) <= 5 {
-				mL, mT, mR, mB := getWindowRect(s.masterHwnd)
-				fL, fT, fR, fB := getWindowRect(hwnd)
-				syncLog("CLICK #%d: msg=%#x screen(%d,%d) masterRect=(%d,%d,%d,%d) followerRect=(%d,%d,%d,%d) lparam=%#x",
-					atomic.LoadInt32(&s.clickCount), msg, screenX, screenY,
-					mL, mT, mR, mB, fL, fT, fR, fB, lparam)
-			}
 		}
 
 	case WM_MOUSEWHEEL:

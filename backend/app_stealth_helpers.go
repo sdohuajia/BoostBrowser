@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"time"
 )
 
 // cdpBrowserWebSocketURL 获取浏览器级 WebSocket 调试地址
@@ -66,6 +67,10 @@ func getCDPPageTargets(debugPort int) ([]string, error) {
 // getVisibleCDPPageTarget avoids unstable /json ordering by choosing the tab
 // that Chrome reports as visible for this browser instance.
 func getVisibleCDPPageTarget(debugPort int) (cdpTarget, error) {
+	return getVisibleCDPPageTargetWithTimeout(debugPort, 5*time.Second)
+}
+
+func getVisibleCDPPageTargetWithTimeout(debugPort int, timeout time.Duration) (cdpTarget, error) {
 	pages, err := getCDPPageTargetInfos(debugPort)
 	if err != nil {
 		return cdpTarget{}, err
@@ -79,10 +84,10 @@ func getVisibleCDPPageTarget(debugPort int) (cdpTarget, error) {
 		if page.URL != "" && page.URL != "about:blank" {
 			fallback = page
 		}
-		result, callErr := cdpCallWebSocket(page.WebSocketDebuggerUrl, "Runtime.evaluate", map[string]any{
+		result, callErr := cdpCallWebSocketWithTimeout(page.WebSocketDebuggerUrl, "Runtime.evaluate", map[string]any{
 			"expression":    "document.visibilityState === 'visible'",
 			"returnByValue": true,
-		})
+		}, timeout)
 		if callErr != nil {
 			continue
 		}

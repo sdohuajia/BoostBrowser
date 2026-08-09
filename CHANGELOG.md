@@ -1,3 +1,10 @@
+# v2.0.4
+
+- Prefer acknowledged CDP `Input.dispatchMouseEvent` delivery for master mouse clicks to every follower instance.
+- Keep the Windows message path as a fallback when CDP is unavailable.
+- Match each event to the follower instance and its visible page target to reduce intermittent missed clicks.
+- This is a normal update, not a forced update.
+
 # v2.0.3
 
 - Improve multi-instance window synchronization reliability for web navigation.
