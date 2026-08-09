@@ -14,8 +14,6 @@ import (
 	"time"
 )
 
-const hubSDKProductionDataRoot = `C:\BoostBrowserTest\data`
-
 type hubSDKWindow struct {
 	Hwnd      int64  `json:"hwnd"`
 	PID       int    `json:"pid"`
@@ -32,6 +30,16 @@ func hubSDKProfileID(hwnd int64) string {
 
 func isHubSDKProfileID(profileID string) bool {
 	return strings.HasPrefix(strings.TrimSpace(profileID), "hubsdk:")
+}
+
+func (a *App) hubSDKSourceDataRoot() string {
+	if configured := strings.TrimSpace(os.Getenv("BOOST_BROWSER_SOURCE_DATA_ROOT")); configured != "" {
+		return filepath.Clean(configured)
+	}
+	if a == nil {
+		return ""
+	}
+	return a.resolveAppPath("data")
 }
 
 func (a *App) hubSDKBridgePath() string {
@@ -65,7 +73,7 @@ func (a *App) hubSDKBridgeRun(timeout time.Duration, args ...string) ([]byte, er
 	cmd.Dir = filepath.Dir(bridge)
 	cmd.Env = append(os.Environ(),
 		"BOOST_BROWSER_TEST_ROOT="+a.appRoot,
-		"BOOST_BROWSER_SOURCE_DATA_ROOT="+hubSDKProductionDataRoot,
+		"BOOST_BROWSER_SOURCE_DATA_ROOT="+a.hubSDKSourceDataRoot(),
 	)
 	hideWindow(cmd)
 	out, err := cmd.CombinedOutput()

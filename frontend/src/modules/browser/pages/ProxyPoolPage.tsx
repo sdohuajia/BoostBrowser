@@ -1783,7 +1783,7 @@ export function ProxyPoolPage() {
                   value={directImportBatchText}
                   onChange={e => setDirectImportBatchText(e.target.value)}
                   rows={7}
-                  placeholder={`一行一个代理，例如：\nsocks5://user:pass@116.212.124.13:28513\nhttp://user:pass@1.2.3.4:8080\nhttps://5.6.7.8:8443\n127.0.0.1:7890`}
+                  placeholder={`一行一个代理，例如：\nsocks5://user:pass@203.0.113.10:1080\nhttp://user:pass@198.51.100.20:8080\nhttps://192.0.2.30:8443\n127.0.0.1:7890`}
                 />
                 <p className="text-xs text-[var(--color-text-muted)] mt-1">
                   支持 http://、https://、socks5://、socks://、socket://；未写协议时默认按 HTTP 导入。填写批量内容后，下方单条表单会被忽略。
@@ -1816,7 +1816,7 @@ export function ProxyPoolPage() {
                       // Not a valid URL, let user fill fields manually
                     }
                   }}
-                  placeholder="例如：socks5://user:pass@116.212.124.13:28513 或 http://127.0.0.1:7890"
+                  placeholder="例如：socks5://user:pass@203.0.113.10:1080 或 http://127.0.0.1:7890"
                 />
                 <p className="text-xs text-[var(--color-text-muted)] mt-1">粘贴完整代理链接后自动填写下方字段；也可手动逐项填写</p>
               </FormItem>

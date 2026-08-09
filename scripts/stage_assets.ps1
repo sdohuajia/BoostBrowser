@@ -17,7 +17,8 @@ $StageRoot = "C:\Temp\BB_dist"
 $NshFile   = "$RepoRoot\build\windows\installer\bb_files.nsh"
 
 # Source = a known-working deployment
-$SrcDeploy = if ($env:BOOST_KERNEL_SRC) { $env:BOOST_KERNEL_SRC } else { 'C:\BoostBrowserTest' }
+$SrcDeploy = $env:BOOST_KERNEL_SRC
+if ([string]::IsNullOrWhiteSpace($SrcDeploy)) { throw "Set BOOST_KERNEL_SRC to the directory containing the Chromium kernels and runtime assets." }
 
 Write-Host "==> Stage assets to $StageRoot" -ForegroundColor Cyan
 

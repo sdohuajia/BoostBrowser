@@ -28,7 +28,7 @@ func TestParseChromeRuntimeCommandLineUnquotedUserDataDir(t *testing.T) {
 
 func TestNormalizeRuntimePathKeyIgnoresCaseAndQuotes(t *testing.T) {
 	left := normalizeRuntimePathKey(`"C:\BoostBrowserTest\data\profile-1\"`)
-	right := normalizeRuntimePathKey(`<legacy-path>boost browser\data\profile-1`)
+	right := normalizeRuntimePathKey(`c:\boostbrowsertest\data\profile-1`)
 	if left != right {
 		t.Fatalf("normalized keys differ: %q vs %q", left, right)
 	}

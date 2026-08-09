@@ -230,8 +230,8 @@ func TestImportMoreLoginProfilesFromPath_TXTRestoresFullBrowserDataFromLocalCach
 	profile := onlyImportedProfile(t, app.browserMgr)
 	dstDir := app.browserMgr.ResolveUserDataDir(profile)
 	for rel, want := range map[string]string{
-		filepath.Join("Local State"):                 `{"profile":{"last_used":"Default"}}`,
-		filepath.Join("Default", "Preferences"):   `{"account_info":[{"email":"buyer@example.com"}]}`,
+		filepath.Join("Local State"):                   `{"profile":{"last_used":"Default"}}`,
+		filepath.Join("Default", "Preferences"):        `{"account_info":[{"email":"buyer@example.com"}]}`,
 		filepath.Join("Default", "Network", "Cookies"): "sqlite-cookie-db",
 	} {
 		data, err := os.ReadFile(filepath.Join(dstDir, rel))
@@ -335,7 +335,7 @@ func TestImportMoreLoginProfilesFromPath_TXTNormalizesMoreLoginProxyAndImportsCo
 		"Profile name=P-300",
 		"Profile ID=300",
 		"Proxy Number=344",
-		"Proxy information=socks5://203.0.113.10:6209:user:pass",
+		"Proxy information=socks5://203.0.113.10:1080:user:pass",
 		"Cookie=[{\"name\":\"sid\",\"value\":\"1\",\"domain\":\".twitter.com\",\"path\":\"/\",\"secure\":true},{\"name\":\"sid2\",\"value\":\"2\",\"domain\":\"accounts.google.com\",\"path\":\"/\",\"secure\":true}]",
 		"",
 	}, "\n"))
@@ -345,13 +345,13 @@ func TestImportMoreLoginProfilesFromPath_TXTNormalizesMoreLoginProxyAndImportsCo
 	}
 
 	profile := onlyImportedProfile(t, app.browserMgr)
-	if profile.ProxyConfig != "socks5://user:pass@203.0.113.10:6209" {
+	if profile.ProxyConfig != "socks5://user:pass@203.0.113.10:1080" {
 		t.Fatalf("normalized proxy mismatch: %q", profile.ProxyConfig)
 	}
 	if profile.ProxyId == "" {
 		t.Fatalf("expected proxy id after import")
 	}
-	assertProxyExists(t, app, profile.ProxyId, "socks5://user:pass@203.0.113.10:6209")
+	assertProxyExists(t, app, profile.ProxyId, "socks5://user:pass@203.0.113.10:1080")
 	if !containsAll(profile.Keywords, []string{"twitter.com", "google.com", "accounts.google.com"}) {
 		t.Fatalf("expected cookie domain keywords, got: %#v", profile.Keywords)
 	}

@@ -41,3 +41,19 @@ backend/*/.boost-browser-import-cookies.json
 .env
 .env.local
 config.yaml.bak*
+# Local runtime state and configuration
+config.yaml
+!config.example.yaml
+*.db
+*.sqlite
+*.sqlite3
+data/
+backend/logs/
+.env.*
+!.env.example
+
+# Local browser/profile artifacts
+*.cookies.json
+*.session
+*.pem
+*.key

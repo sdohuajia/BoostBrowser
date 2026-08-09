@@ -8,16 +8,18 @@ import (
 // migrateLegacyConfig 修复 v1.1.0 错误版本写入的配置。
 //
 // 背景：
-//   v1.1.0 安装包构建脚本错误地拷贝了开发机的 config.yaml，导致：
-//     1. cores 列表里 bundled-google-chrome-latest 标了 is_default: true，
-//        且根本缺少 bundled-cloak-chromium-latest 条目，新建实例默认 Google Chrome 148
-//     2. default_launch_args 含 --load-extension=<app-root>\extensions\...
-//        指向开发机绝对路径，新用户启动时弹"清单文件缺失"
+//
+//	v1.1.0 安装包构建脚本错误地拷贝了开发机的 config.yaml，导致：
+//	  1. cores 列表里 bundled-google-chrome-latest 标了 is_default: true，
+//	     且根本缺少 bundled-cloak-chromium-latest 条目，新建实例默认 Google Chrome 148
+//	  2. default_launch_args 含 --load-extension=<app-root>\extensions\...
+//	     指向开发机绝对路径，新用户启动时弹"清单文件缺失"
 //
 // 该迁移只在检测到上述精确指纹时触发，绝不覆盖用户主动改过的合法配置。
 //
 // 升级路径：
-//   v1.1.0 用户 → 自动升级到 v1.2.0 → 启动时这里把 config 修好 → 默认 Chromium 146 + 不再弹错
+//
+//	v1.1.0 用户 → 自动升级到 v1.2.0 → 启动时这里把 config 修好 → 默认 Chromium 146 + 不再弹错
 //
 // 返回 true 表示配置被修改过，调用方需要 Save 回写。
 func migrateLegacyConfig(cfg *Config) bool {
@@ -58,7 +60,7 @@ func migrateLegacyConfig(cfg *Config) bool {
 		droppedExt := false
 		for _, arg := range cfg.Browser.DefaultLaunchArgs {
 			lower := strings.ToLower(arg)
-			// 命中 v1.1.0 错误参数：--load-extension=<app-root>\...
+			// 命中 v1.1.0 错误参数：--load-extension=<legacy-path>BoostBrowser_cloak_test\...
 			if strings.HasPrefix(lower, "--load-extension=") &&
 				strings.Contains(lower, "boostbrowser_cloak_test") {
 				droppedExt = true

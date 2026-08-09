@@ -9,8 +9,8 @@ import (
 )
 
 func TestRemoveExtensionDirFromLaunchArgs(t *testing.T) {
-	target := `<legacy-path>Boost Browser\\extensions\\imported\\mcohilncbfahbmgdjkbpemcciiolgcge`
-	other := `<legacy-path>Boost Browser\\extensions\\imported\\nkbihfbeogaeaoehlefnkodbefgpgknn`
+	target := `C:\\BoostBrowserTest\\extensions\\imported\\mcohilncbfahbmgdjkbpemcciiolgcge`
+	other := `C:\\BoostBrowserTest\\extensions\\imported\\nkbihfbeogaeaoehlefnkodbefgpgknn`
 	args := []string{
 		"--disable-sync",
 		"--load-extension=" + target + "," + other,

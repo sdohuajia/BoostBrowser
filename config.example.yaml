@@ -1,0 +1,74 @@
+database:
+    type: sqlite
+    sqlite:
+        path: data/app.db
+app:
+    name: Boost Browser
+    window:
+        width: 1750
+        height: 1000
+        min_width: 1200
+        min_height: 700
+    max_profile_limit: 0
+    used_cd_keys: []
+runtime:
+    max_memory_mb: 0
+    gc_percent: 100
+logging:
+    level: info
+    file_enabled: false
+    file_path: data/logs/app.log
+    format: text
+    buffer_size: 4
+    async_queue_size: 1000
+    flush_interval_ms: 1000
+    rotation:
+        enabled: false
+        max_size_mb: 100
+        max_age: 7
+        max_backups: 5
+        time_interval: daily
+    interceptor:
+        enabled: true
+        log_parameters: true
+        log_results: true
+        sensitive_fields:
+            - password
+            - token
+            - secret
+browser:
+    user_data_root: data
+    default_fingerprint_args:
+        - --fingerprint-platform=windows
+        - --fingerprint-platform-version=10.0.0
+        - --fingerprint-brand=Google Chrome
+        - --fingerprint-brand-version=146
+        - --fingerprint-noise=1
+        - --fingerprint-hardware-concurrency=12
+        - --fingerprint-device-memory=16
+        - --fingerprint-screen-width=1920
+        - --fingerprint-screen-height=1080
+        - --webrtc-ip-handling-policy=disable_non_proxied_udp
+    default_launch_args:
+        - --disable-sync
+        - --no-first-run
+    default_proxy: ""
+    start_ready_timeout_ms: 3000
+    start_stable_window_ms: 1200
+    cores:
+        - core_id: bundled-cloak-chromium-latest
+          core_name: Chromium 146
+          core_path: chrome\cloak-146.0.7680.177
+          is_default: true
+        - core_id: bundled-google-chrome-latest
+          core_name: Google Chrome 148.0.7778.167（内置隔离）
+          core_path: chrome\google-148.0.7778.167
+          is_default: false
+    proxies: []
+    profiles: []
+launch_server:
+    port: 19876
+    auth:
+        enabled: false
+        api_key: ""
+        header: X-Boost-Api-Key

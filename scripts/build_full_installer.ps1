@@ -23,7 +23,7 @@
 #   $env:BOOST_SKIP_BUILD = '1'    跳过 wails+go 编译，直接复用 build\release\
 #   $env:BOOST_KERNEL_SRC = 'D:\xxx'  覆盖 chromium 内核源
 $SkipBuild = ($env:BOOST_SKIP_BUILD -eq '1')
-$KernelSrc = if ($env:BOOST_KERNEL_SRC) { $env:BOOST_KERNEL_SRC } else { '<kernel-source>' }
+$KernelSrc = $env:BOOST_KERNEL_SRC
 
 $RepoRoot   = Split-Path -Parent $PSScriptRoot
 $ReleaseDir = Join-Path $RepoRoot 'build\release'
@@ -37,6 +37,7 @@ $HeaderBmp  = Join-Path $RepoRoot 'build\release\full_header.bmp'
 Set-Location $RepoRoot
 
 if (!(Test-Path $Icon))      { throw "Missing icon: $Icon" }
+if ([string]::IsNullOrWhiteSpace($KernelSrc)) { throw "Set BOOST_KERNEL_SRC to the directory containing the Chromium kernels and runtime assets." }
 if (!(Test-Path $KernelSrc)) { throw "Missing kernel source dir: $KernelSrc" }
 
 # 读 wails.json 拿版本号
@@ -399,7 +400,7 @@ Write-Host "STAGE  = $Stage"
 Write-Host ("FILES  = {0}" -f (Get-ChildItem $Stage -Recurse -File).Count)
 Write-Host ""
 Write-Host "对比老版安装包:" -ForegroundColor Cyan
-$oldExe = '<legacy-path>BoostBrowser_cloak_Setup.exe'
+$oldExe = $env:BOOST_PREVIOUS_INSTALLER
 if (Test-Path $oldExe) {
     $oldSize = (Get-Item $oldExe).Length
     Write-Host ("  老 cloak 安装包 = {0:N1} MB" -f ($oldSize / 1MB))

@@ -2,9 +2,9 @@
 
 > 面向多账号隔离、代理绑定和本地环境管理的桌面浏览器工具（Windows / Linux）。
 
-[![Release](https://img.shields.io/github/v/release/black-ant/Ant-Browser?sort=semver)](https://github.com/black-ant/Ant-Browser/releases)
-[![Platform](https://img.shields.io/badge/Platform-Windows%20%7C%20Linux-blue)](https://github.com/black-ant/Ant-Browser/releases)
-[![Issues](https://img.shields.io/github/issues/black-ant/Ant-Browser)](https://github.com/black-ant/Ant-Browser/issues)
+[![Release](https://img.shields.io/github/v/release/sdohuajia/BoostBrowser?sort=semver)](https://github.com/sdohuajia/BoostBrowser/releases)
+[![Platform](https://img.shields.io/badge/Platform-Windows%20%7C%20Linux-blue)](https://github.com/sdohuajia/BoostBrowser/releases)
+[![Issues](https://img.shields.io/github/issues/sdohuajia/BoostBrowser)](https://github.com/sdohuajia/BoostBrowser/issues)
 
 ## 推荐内核项目
 
@@ -180,7 +180,7 @@ Boost Browser 适合以下场景：
 
 ### 下载与运行
 
-1. 前往 Releases 页面下载最新版本：<https://github.com/black-ant/Ant-Browser/releases>
+1. 前往 Releases 页面下载最新版本：<https://github.com/sdohuajia/BoostBrowser/releases>
 2. 安装版直接运行 `AntBrowser-Setup-*.exe`
 3. 便携版解压后运行 `boost-browser.exe`
 4. Linux 包下载后可直接安装 `boost-browser_<version>_<arch>.deb`，或解压 `tar.gz` 后运行 `boost-browser`
@@ -285,8 +285,8 @@ chrome/
 
 ## 支持与反馈
 
-- Releases：<https://github.com/black-ant/Ant-Browser/releases>
-- Issues：<https://github.com/black-ant/Ant-Browser/issues>
+- Releases：<https://github.com/sdohuajia/BoostBrowser/releases>
+- Issues：<https://github.com/sdohuajia/BoostBrowser/issues>
 
 ## License
 
