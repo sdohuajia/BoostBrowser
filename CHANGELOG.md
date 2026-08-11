@@ -1,3 +1,10 @@
+# v2.1.0
+
+- Force browser instances to use the Chinese Chromium UI locale (`zh-CN`).
+- Allow wallet connection popups only for instances that load managed extensions.
+- Remove stale OKX shortcut and toolbar registrations while preserving extension and wallet storage.
+- This is a normal update, not a forced update.
+
 # v2.0.4
 
 - Prefer acknowledged CDP `Input.dispatchMouseEvent` delivery for master mouse clicks to every follower instance.

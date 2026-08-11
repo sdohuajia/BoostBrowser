@@ -52,6 +52,27 @@ func buildChromeUAFromFingerprintArgs(chromeVersion string, fpArgs []string) str
 	}
 }
 
+func forceChineseChromiumLocale(args []string) []string {
+	out := make([]string, 0, len(args)+1)
+	for _, arg := range args {
+		if strings.HasPrefix(strings.ToLower(strings.TrimSpace(arg)), "--lang=") {
+			continue
+		}
+		out = append(out, arg)
+	}
+	out = append(out, "--lang=zh-CN")
+	return out
+}
+
+func allowWalletConnectionPopups(args []string) []string {
+	for _, arg := range args {
+		if strings.EqualFold(strings.TrimSpace(arg), "--disable-popup-blocking") {
+			return args
+		}
+	}
+	return append(args, "--disable-popup-blocking")
+}
+
 // extractBadgeNumberFromName 从 ProfileName 里抽出 badge 显示的数字。
 // 规则：取名字里**最后一段**连续数字。
 //   - "1"        → 1
@@ -178,6 +199,7 @@ func (a *App) browserInstanceStartInternal(profileId string, extraLaunchArgs []s
 	}
 	isCloakSelectedCore := selectedCoreFound && isCloakCore(selectedCore, chromeBinaryPath)
 	effectiveFingerprintArgs := buildEffectiveFingerprintArgs(profile, selectedCore, chromeBinaryPath)
+	effectiveFingerprintArgs = forceChineseChromiumLocale(effectiveFingerprintArgs)
 
 	userDataDir := a.browserMgr.ResolveUserDataDir(profile)
 	if err := os.MkdirAll(userDataDir, 0755); err != nil {
@@ -186,6 +208,8 @@ func (a *App) browserInstanceStartInternal(profileId string, extraLaunchArgs []s
 		profile.LastError = startErr.Error()
 		return profile, startErr
 	}
+	forceChineseProfileLocale(userDataDir)
+	dedupeStaleOKXRegistrations(userDataDir)
 	// 启动前关闭 Chrome 的“恢复上次会话”，避免上次遗留的扩展 welcome/options 页面
 	// 在重开实例时再次弹出。
 	sanitizeChromeStartupPreferences(userDataDir)
@@ -520,6 +544,9 @@ func (a *App) browserInstanceStartInternal(profileId string, extraLaunchArgs []s
 	}
 
 	args = normalizeLoadExtensionArgs(args)
+	if len(activeLoadExtensionDirs(args)) > 0 {
+		args = allowWalletConnectionPopups(args)
+	}
 	enableDeveloperModeForManagedUnpackedExtensions(userDataDir, args)
 	// 清理 profile 中旧的 unpacked 扩展记录，避免同一个钱包/Header Fix 因旧路径残留显示两份。
 	cleanupStaleManagedUnpackedExtensions(userDataDir, args, a.appRoot)
@@ -1277,6 +1304,9 @@ func (a *App) openBrowserWindowForRunningProfile(profile *BrowserProfile, extraL
 	args = append(args, sanitizedExtraLaunchArgs...)
 	args = appendChromeTestingInfobarSuppressArg(args, isCloakCoreForOpen)
 	args = normalizeLoadExtensionArgs(args)
+	if len(activeLoadExtensionDirs(args)) > 0 {
+		args = allowWalletConnectionPopups(args)
+	}
 	enableDeveloperModeForManagedUnpackedExtensions(userDataDir, args)
 	if len(startURLs) > 0 {
 		args = append(args, startURLs...)

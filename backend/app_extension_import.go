@@ -27,6 +27,10 @@ type ExtensionImportResult struct {
 
 var chromeWebStoreIDPattern = regexp.MustCompile(`[a-p]{32}`)
 
+var staleOKXExtensionIDs = map[string]bool{
+	"ajmpgkcoippjhgcipkhbbajcinebaohc": true,
+}
+
 // BrowserProfileRemoveExtension 解除扩展与实例启动参数的绑定，并清理 profile 内残留的扩展记录。
 func (a *App) BrowserProfileRemoveExtension(profileIds []string, downloadAddress string) (*ExtensionImportResult, error) {
 	profileIds = normalizeProfileIDs(profileIds)
@@ -797,6 +801,72 @@ func enableDeveloperModeForManagedUnpackedExtensions(userDataDir string, args []
 		ui["developer_mode"] = true
 		if out, err := json.Marshal(prefs); err == nil {
 			_ = os.WriteFile(prefPath, out, 0644)
+		}
+	}
+}
+
+func forceChineseProfileLocale(userDataDir string) {
+	for _, prefPath := range chromeProfilePreferencePaths(userDataDir) {
+		data, err := os.ReadFile(prefPath)
+		if err != nil || len(strings.TrimSpace(string(data))) == 0 {
+			continue
+		}
+		var prefs map[string]any
+		if json.Unmarshal(data, &prefs) != nil {
+			continue
+		}
+		intl, ok := prefs["intl"].(map[string]any)
+		if !ok {
+			intl = make(map[string]any)
+			prefs["intl"] = intl
+		}
+		intl["accept_languages"] = "zh-CN,zh,en-US,en"
+		intl["selected_languages"] = "zh-CN,zh,en-US,en"
+		if out, err := json.Marshal(prefs); err == nil {
+			_ = os.WriteFile(prefPath, out, 0644)
+		}
+	}
+}
+
+func dedupeStaleOKXRegistrations(userDataDir string) {
+	for _, prefPath := range chromeProfilePreferencePaths(userDataDir) {
+		data, err := os.ReadFile(prefPath)
+		if err != nil || len(strings.TrimSpace(string(data))) == 0 {
+			continue
+		}
+		var prefs map[string]any
+		if json.Unmarshal(data, &prefs) != nil {
+			continue
+		}
+		changed := false
+		if commands, ok := prefs["commands"].(map[string]any); ok {
+			for key, raw := range commands {
+				entry, ok := raw.(map[string]any)
+				id, _ := entry["extension"].(string)
+				if ok && staleOKXExtensionIDs[strings.ToLower(id)] {
+					delete(commands, key)
+					changed = true
+				}
+			}
+		}
+		if extensions, ok := prefs["extensions"].(map[string]any); ok {
+			if pinned, ok := extensions["pinned_extensions"].([]any); ok {
+				filtered := make([]any, 0, len(pinned))
+				for _, raw := range pinned {
+					id, _ := raw.(string)
+					if staleOKXExtensionIDs[strings.ToLower(id)] {
+						changed = true
+						continue
+					}
+					filtered = append(filtered, raw)
+				}
+				extensions["pinned_extensions"] = filtered
+			}
+		}
+		if changed {
+			if out, err := json.Marshal(prefs); err == nil {
+				_ = os.WriteFile(prefPath, out, 0644)
+			}
 		}
 	}
 }
