@@ -1,3 +1,9 @@
+# v2.2.0
+
+- 修复重复导入或重新安装扩展后，Chromium 同时保留旧 Chrome Web Store 注册和当前受管解包副本，导致扩展管理页显示两张相同插件卡片的问题。
+- 启动实例时识别并清理无 `path` 的旧 Web Store 残留记录；保留当前 `--load-extension` 实际加载的副本。
+- 同步移除旧插件的工具栏固定项与 Profile 扩展数据，避免 OKX Wallet 等插件重启后再次显示重复项。
+- 这是普通更新，不是强制更新。
 # v2.1.0
 
 - Force browser instances to use the Chinese Chromium UI locale (`zh-CN`).

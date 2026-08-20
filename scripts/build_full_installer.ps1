@@ -401,7 +401,7 @@ Write-Host ("FILES  = {0}" -f (Get-ChildItem $Stage -Recurse -File).Count)
 Write-Host ""
 Write-Host "对比老版安装包:" -ForegroundColor Cyan
 $oldExe = $env:BOOST_PREVIOUS_INSTALLER
-if (Test-Path $oldExe) {
+if (![string]::IsNullOrWhiteSpace($oldExe) -and (Test-Path -LiteralPath $oldExe)) {
     $oldSize = (Get-Item $oldExe).Length
     Write-Host ("  老 cloak 安装包 = {0:N1} MB" -f ($oldSize / 1MB))
     Write-Host ("  新完整安装包    = {0:N1} MB" -f ($size / 1MB))

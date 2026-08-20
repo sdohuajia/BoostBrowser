@@ -69,7 +69,7 @@ func TestCleanupStaleManagedUnpackedExtensionsRemovesOldDuplicateByManifestName(
 					"manifest": map[string]any{"name": "MetaMask"},
 				},
 				"webstoreid": map[string]any{
-					"manifest": map[string]any{"name": "MetaMask"},
+					"manifest": map[string]any{"name": "Unrelated Web Store Extension"},
 				},
 			},
 		},
@@ -162,5 +162,67 @@ func TestCleanupRemovedManagedExtensionRemovesPinnedAndProfileData(t *testing.T)
 	}
 	if _, err := os.Stat(filepath.Join(profileDir, "Extensions", extID)); !os.IsNotExist(err) {
 		t.Fatalf("removed extension profile data should be deleted")
+	}
+}
+
+func TestCleanupStaleManagedUnpackedExtensionsRemovesPathlessWebStoreDuplicate(t *testing.T) {
+	root := t.TempDir()
+	userDataDir := filepath.Join(root, "profile")
+	profileDir := filepath.Join(userDataDir, "Default")
+	activeID := "mcohilncbfahbmgdjkbpemcciiolgcge"
+	staleID := "ajmpgkcoippjhgcipkhbbajcinebaohc"
+	activeExt := filepath.Join(root, "extensions", "imported", activeID)
+	if err := os.MkdirAll(filepath.Join(profileDir, "Extensions", staleID), 0755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.MkdirAll(activeExt, 0755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(activeExt, "manifest.json"), []byte(`{"name":"OKX Wallet","version":"1.0","manifest_version":3}`), 0644); err != nil {
+		t.Fatal(err)
+	}
+	prefs := map[string]any{
+		"extensions": map[string]any{
+			"settings": map[string]any{
+				activeID: map[string]any{
+					"path":     activeExt,
+					"manifest": map[string]any{"name": "OKX Wallet"},
+				},
+				staleID: map[string]any{
+					"manifest": map[string]any{"name": "OKX Wallet"},
+				},
+			},
+			"pinned_extensions": []any{activeID, staleID},
+		},
+	}
+	data, _ := json.Marshal(prefs)
+	if err := os.WriteFile(filepath.Join(profileDir, "Preferences"), data, 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	cleanupStaleManagedUnpackedExtensions(userDataDir, []string{"--load-extension=" + activeExt}, root)
+
+	outData, err := os.ReadFile(filepath.Join(profileDir, "Preferences"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	var out map[string]any
+	if err := json.Unmarshal(outData, &out); err != nil {
+		t.Fatal(err)
+	}
+	extensions := out["extensions"].(map[string]any)
+	settings := extensions["settings"].(map[string]any)
+	if _, ok := settings[staleID]; ok {
+		t.Fatalf("pathless Web Store duplicate was not removed")
+	}
+	if _, ok := settings[activeID]; !ok {
+		t.Fatalf("active managed extension should be kept")
+	}
+	pinned := extensions["pinned_extensions"].([]any)
+	if len(pinned) != 1 || pinned[0].(string) != activeID {
+		t.Fatalf("unexpected pinned_extensions after cleanup: %#v", pinned)
+	}
+	if _, err := os.Stat(filepath.Join(profileDir, "Extensions", staleID)); !os.IsNotExist(err) {
+		t.Fatalf("stale Web Store extension profile data should be removed")
 	}
 }

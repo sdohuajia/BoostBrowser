@@ -664,28 +664,36 @@ func cleanupStaleUnpackedExtensionsInPreferences(prefPath string, active map[str
 			continue
 		}
 		extPath, _ := setting["path"].(string)
-		if strings.TrimSpace(extPath) == "" {
-			continue
-		}
 		normPath := normalizeExtensionPath(extPath)
-		if active[normPath] != "" {
+		idLower := strings.ToLower(strings.TrimSpace(id))
+		// Keep the record that Chrome associates with the currently loaded directory.
+		// A Web Store copy has no "path", so it must be identified by ID rather than
+		// skipped before the manifest-name comparison below.
+		if active[normPath] != "" || activeIDs[idLower] {
 			continue
 		}
 		name := extensionSettingManifestName(setting)
 		isManagedPath := false
 		for _, root := range managedRoots {
-			if root != "" && (normPath == root || strings.HasPrefix(normPath, root+string(os.PathSeparator))) {
+			if root != "" && normPath != "" && (normPath == root || strings.HasPrefix(normPath, root+string(os.PathSeparator))) {
 				isManagedPath = true
 				break
 			}
 		}
-		if isManagedPath || activeIDs[strings.ToLower(id)] || (name != "" && activeNames[name]) {
+		// Reinstalling a managed extension can leave Chrome's prior Web Store
+		// registration behind. That record normally has no path, but has the same
+		// manifest name. Remove it only when the selected profile actively loads a
+		// managed copy with that name, so a second card cannot survive the restart.
+		if isManagedPath || (name != "" && activeNames[name]) {
 			delete(settings, id)
 			removedIDs = append(removedIDs, id)
 		}
 	}
 	if len(removedIDs) == 0 {
 		return
+	}
+	if pinnedRaw, ok := extensions["pinned_extensions"]; ok {
+		extensions["pinned_extensions"] = removePinnedExtensionIDs(pinnedRaw, removedIDs)
 	}
 	if out, err := json.MarshalIndent(prefs, "", "   "); err == nil {
 		_ = os.WriteFile(prefPath, out, 0644)
